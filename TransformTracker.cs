@@ -2,6 +2,7 @@
 using ReplayEditor;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityModManagerNet;
 
 namespace walking_mod
 {
@@ -39,13 +40,14 @@ namespace walking_mod
             BufferFrameCount = Mathf.RoundToInt(ReplaySettings.Instance.FPS * ReplaySettings.Instance.MaxRecordedTime);
         }
 
-        public void Update()
+        public void FixedUpdate()
         {
             if (GameStateMachine.Instance.CurrentState.GetType() == typeof(ReplayState))
             {
                 int index = getFrame();
                 if (index >= 0 && tracker.position[index] != null)
                 {
+                    UnityModManager.Logger.Log("Has frame");
                     transform.position = Vector3.Lerp(transform.position, tracker.position[index], ReplayEditorController.Instance.playbackController.TimeScale);
                     transform.rotation = Quaternion.Slerp(transform.rotation, tracker.rotation[index], ReplayEditorController.Instance.playbackController.TimeScale);
                 }

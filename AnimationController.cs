@@ -15,13 +15,15 @@ namespace walking_mod
 
         AnimationJSON animation;
         FakeSkater fs;
-        public string path;
+        public string path = "";
         public Vector3 offset = new Vector3(0, -.73f, 0);
         CallBack callback;
         bool loop = true;
+        GameObject copy;
 
         public AnimController()
         {
+            this.animation_name = "NotSet";
         }
 
         public AnimController(string path, FakeSkater fs)
@@ -37,6 +39,16 @@ namespace walking_mod
             this.path = path;
             this.fs = fs;
             this.loop = loop;
+
+            LoadJSON();
+        }
+
+        public AnimController(string path, FakeSkater fs, bool loop, int crossfade)
+        {
+            this.path = path;
+            this.fs = fs;
+            this.loop = loop;
+            this.crossfade = crossfade;
 
             LoadJSON();
         }
@@ -88,10 +100,11 @@ namespace walking_mod
         }
 
         float animTime = 0f;
-        public int frame, count = 0, crossfade = 16;
+        public int frame = 0, count = 0, crossfade = 16;
 
         public void FixedUpdate()
         {
+            if (copy == null) copy = new GameObject();
             if (fs.self && isPlaying)
             {
                 int index = 0;
@@ -115,28 +128,32 @@ namespace walking_mod
                             Type type = typeof(AnimationJSONParts);
                             var property = type.GetProperty(part);
                             AnimationJSONPart apart = (AnimationJSONPart)property.GetValue(animation.parts, null);
+                            Vector3 anim_position = new Vector3(apart.position[index][0], apart.position[index][1], apart.position[index][2]);
 
-                            GameObject copy = new GameObject();
+                            /*if (count == 0 && frame == 0 && crossfade != 1)
+                            {
+                                crossfade = (int)Vector3.Distance(tpart.transform.position, anim_position);
+                                crossfade = crossfade > 16 ? 16 : crossfade;
+                            }*/
+
                             copy.transform.position = translateLocal(fs.self.transform, offset);
                             copy.transform.rotation = fs.self.transform.rotation;
 
-                            float step = count < crossfade ? Time.deltaTime * (48 / (crossfade - count)) : Time.deltaTime * 48f;
-                            tpart.position = Vector3.Lerp(tpart.position, translateLocal(copy.transform, new Vector3(apart.position[index][0], apart.position[index][1], apart.position[index][2])), step);
+                            float step = count < crossfade ? Time.smoothDeltaTime * (48 / (crossfade - count)) : Time.smoothDeltaTime * 48f;
+                            tpart.position = Vector3.Lerp(tpart.position, translateLocal(copy.transform, anim_position), step);
                             Transform result = rotateLocal(copy.transform, new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]));
 
                             /*result.Rotate(90, 0, 0, Space.Self); // mixamo
                             result.Rotate(0, -90, 0, Space.Self);*/ // mixamo
 
                             tpart.rotation = Quaternion.Slerp(tpart.rotation, result.rotation, step);
-
-                            Destroy(copy);
                         }
                         catch {
                             UnityModManager.Logger.Log("Catch error");
                         }
                     }
                 }
-                animTime += Time.fixedDeltaTime;
+                animTime += Time.smoothDeltaTime;
                 count++;
 
                 if (animTime > animation.duration) {

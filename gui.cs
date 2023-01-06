@@ -78,6 +78,8 @@ namespace walking_mod
             if (PlayerController.Instance.inputController.player.GetButtonDown(68) || PlayerController.Instance.inputController.player.GetButton(68)) dpad = "down";
             if (PlayerController.Instance.inputController.player.GetButtonDown(69) || PlayerController.Instance.inputController.player.GetButton(69)) dpad = "right";
             if (PlayerController.Instance.inputController.player.GetButtonDown(67) || PlayerController.Instance.inputController.player.GetButton(67)) dpad = "top";
+
+            if (!Main.walking_go.inState) visible = false;
         }
 
         private void OnGUI()

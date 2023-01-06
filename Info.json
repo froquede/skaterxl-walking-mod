@@ -2,10 +2,10 @@
   "Id": "walking-mod",
   "DisplayName": "Walking Mod",
   "Author": "froquede",
-  "Version": "0.0.2_test",
+  "Version": "0.1.0",
   "ManagerVersion": "0.22.5.0",
   "Requirements": [],
-  "LoadAfter": [ "XXLMod3" ],
+  "LoadAfter": [ "XLGearModifier" ],
   "HomePage": "https://github.com/roquef/skaterxl-walking-mod",
   "AssemblyName": "walking-mod.dll",
   "EntryMethod": "walking_mod.Main.Load"

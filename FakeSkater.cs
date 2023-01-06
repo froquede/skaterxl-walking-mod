@@ -64,9 +64,9 @@ namespace walking_mod
                 collider.height = 1.4404f;
                 collider.radius = .2f;
                 collider.material.dynamicFriction = .275f;
-                collider.material.staticFriction = .45f;
+                collider.material.staticFriction = .6f;
 
-                //getParts();
+                cache = new Dictionary<string, Transform>();
             }
         }
 
@@ -102,13 +102,14 @@ namespace walking_mod
             right_toe_2 = joints.FindChildRecursively("Skater_Toe2_r");
         }
 
-        public IDictionary<string, Transform> cache = new Dictionary<string, Transform>();
+        public IDictionary<string, Transform> cache;
         public Transform getPart(string id)
         {
             Transform joints = self.transform.Find("Skater_Joints");
-            if (!cache.ContainsKey(id)) {
+            if (!cache.ContainsKey(id))
+            {
                 Transform joint = joints.FindChildRecursively(id);
-                joint.gameObject.AddComponent<TransformTracker>();
+                //joint.gameObject.AddComponent<TransformTracker>();
                 cache.Add(id, joint);
             }
             return cache[id];
