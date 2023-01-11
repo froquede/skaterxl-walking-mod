@@ -19,7 +19,6 @@ namespace walking_mod
         static bool Load(UnityModManager.ModEntry modEntry)
         {
             harmonyInstance = new Harmony(modEntry.Info.Id);
-            settings = UnityModManager.ModSettings.Load<Settings>(modEntry);
 
             go = new GameObject();
             walking_go = go.AddComponent<WalkingController>();
@@ -27,11 +26,13 @@ namespace walking_mod
             ui = go.AddComponent<gui>();
             UnityEngine.Object.DontDestroyOnLoad(ui);
 
-            //modEntry.OnGUI = OnGUI;
+            modEntry.OnGUI = OnGUI;
             modEntry.OnSaveGUI = new Action<UnityModManager.ModEntry>(OnSaveGUI);
             modEntry.OnToggle = new Func<UnityModManager.ModEntry, bool, bool>(OnToggle);
             modEntry.OnUnload = Unload;
             Main.modEntry = modEntry;
+
+            settings = UnityModManager.ModSettings.Load<Settings>(modEntry);
 
             UnityModManager.Logger.Log("Loaded " + modEntry.Info.Id);
             return true;
@@ -50,12 +51,35 @@ namespace walking_mod
 
         private static void OnGUI(UnityModManager.ModEntry modEntry)
         {
+            GUILayout.BeginVertical(GUILayout.Width(256));
+
+            GUILayout.BeginVertical();
+            GUILayout.Label("Volume");
+            settings.volume = GUILayout.HorizontalScrollbar(settings.volume, .1f, 0f, 1f);
+            GUILayout.EndVertical();
+
+            GUILayout.Space(12);
+
+            if (!settings.experimental_bail)
+            {
+                if (GUILayout.Button("Enable experimental multiplayer on bail", GUILayout.Height(42))) {
+                    settings.experimental_bail = true;
+                }
+            }
+            else
+            {
+                if (GUILayout.Button("Disable experimental multiplayer on bail", GUILayout.Height(42)))
+                {
+                    settings.experimental_bail = false;
+                }
+            }
+            GUILayout.EndVertical();
             settings.Draw(modEntry);
         }
 
         private static void OnSaveGUI(UnityModManager.ModEntry modEntry)
         {
-            settings.Save(modEntry);
+
         }
     }
 }

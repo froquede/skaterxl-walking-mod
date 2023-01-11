@@ -96,7 +96,7 @@ namespace walking_mod
             if (lb) GUI.DrawTexture(new Rect((Screen.width / 60) + 88f, (Screen.height / 2) - user_icon.height / 2, user_icon.width, user_icon.height), user_icon);
             if (rb) GUI.DrawTexture(new Rect((Screen.width / 60) + 86f, (Screen.height / 2) - sound_icon.height / 2, sound_icon.width, sound_icon.height), sound_icon);
 
-            if(lb)
+            if (lb)
             {
                 EllipsisText(new Rect((Screen.width / 60) + 156f, (Screen.height / 2) - 42.5f, 32, 85), Main.walking_go.emote3.name.ToUpper());
                 EllipsisText(new Rect((Screen.width / 60) + 16f, (Screen.height / 2) - 42.5f, 32, 85), Main.walking_go.emote1.name.ToUpper());
@@ -107,71 +107,77 @@ namespace walking_mod
 
         void EllipsisText(Rect rect, string text)
         {
-            /*Color originalColor = GUI.color;
-            GUI.color = Color.red;
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = originalColor;*/
-
-            string displayText = text;
-            float textWidth = style.CalcSize(new GUIContent(displayText)).x;
-            float rectWidth = rect.width;
-
-            if (textWidth > rectWidth)
+            try
             {
-                string ellipsis = "...";
-                float rectHeight = rect.height;
-                float lineHeight = style.lineHeight;
-                int maxLines = Mathf.FloorToInt(rectHeight / lineHeight);
+                /*Color originalColor = GUI.color;
+                GUI.color = Color.red;
+                GUI.DrawTexture(rect, Texture2D.whiteTexture);
+                GUI.color = originalColor;*/
 
-                string[] characters = text.ToCharArray().Select(c => c.ToString()).ToArray();
-                displayText = "";
-                int lineCount = 1;
-                for (int i = 0; i < characters.Length; i++)
+                string displayText = text;
+                float textWidth = style.CalcSize(new GUIContent(displayText)).x;
+                float rectWidth = rect.width;
+
+                if (textWidth > rectWidth)
                 {
-                    string character = characters[i];
-                    string testString = displayText + character;
-                    textWidth = style.CalcSize(new GUIContent(testString)).x;
-                    if (textWidth > rectWidth || lineCount == maxLines)
+                    string ellipsis = "...";
+                    float rectHeight = rect.height;
+                    float lineHeight = style.lineHeight;
+                    int maxLines = Mathf.FloorToInt(rectHeight / lineHeight);
+
+                    string[] characters = text.ToCharArray().Select(c => c.ToString()).ToArray();
+                    displayText = "";
+                    int lineCount = 1;
+                    for (int i = 0; i < characters.Length; i++)
                     {
-                        if (displayText == "")
+                        string character = characters[i];
+                        string testString = displayText + character;
+                        textWidth = style.CalcSize(new GUIContent(testString)).x;
+                        if (textWidth > rectWidth || lineCount == maxLines)
                         {
-                            displayText = character;
+                            if (displayText == "")
+                            {
+                                displayText = character;
+                            }
+                            else
+                            {
+                                displayText += "\n" + character;
+                            }
+                            lineCount++;
                         }
                         else
                         {
-                            displayText += "\n" + character;
+                            displayText += character;
                         }
-                        lineCount++;
                     }
-                    else
+
+                    while (style.CalcSize(new GUIContent(displayText)).y > rectHeight && displayText.Contains("\n"))
                     {
-                        displayText += character;
+                        int lastLineBreak = displayText.LastIndexOf("\n");
+                        displayText = displayText.Substring(0, lastLineBreak);
+                    }
+
+                    if (style.CalcSize(new GUIContent(displayText)).y > rectHeight)
+                    {
+                        while (textWidth > rectWidth - style.fontSize)
+                        {
+                            displayText = displayText.Substring(0, displayText.Length - 1);
+                            textWidth = style.CalcSize(new GUIContent(displayText + ellipsis)).x;
+                        }
+                        displayText += ellipsis;
                     }
                 }
 
-                while (style.CalcSize(new GUIContent(displayText)).y > rectHeight && displayText.Contains("\n"))
-                {
-                    int lastLineBreak = displayText.LastIndexOf("\n");
-                    displayText = displayText.Substring(0, lastLineBreak);
-                }
-
-                if (style.CalcSize(new GUIContent(displayText)).y > rectHeight)
-                {
-                    while (textWidth > rectWidth - style.fontSize)
-                    {
-                        displayText = displayText.Substring(0, displayText.Length - 1);
-                        textWidth = style.CalcSize(new GUIContent(displayText + ellipsis)).x;
-                    }
-                    displayText += ellipsis;
-                }
+                Vector2 textSize = style.CalcSize(new GUIContent(displayText));
+                float x = rect.x + (rect.width - textSize.x) / 2;
+                float y = rect.y + (rect.height - textSize.y) / 2;
+                Rect centeredRect = new Rect(x, y, rect.width, rect.height);
+                GUI.Label(centeredRect, displayText, style);
             }
-
-            Vector2 textSize = style.CalcSize(new GUIContent(displayText));
-            float x = rect.x + (rect.width - textSize.x) / 2;
-            float y = rect.y + (rect.height - textSize.y) / 2;
-            Rect centeredRect = new Rect(x, y, rect.width, rect.height);
-            GUI.Label(centeredRect, displayText, style);
-            //GUI.Label(rect, displayText, style);
+            catch
+            {
+                GUI.Label(rect, text);
+            }
         }
     }
 }

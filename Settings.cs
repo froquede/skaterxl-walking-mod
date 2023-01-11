@@ -10,6 +10,8 @@ namespace walking_mod
     public class Settings : UnityModManager.ModSettings, IDrawable
     {
         public bool enabled = true;
+        public bool experimental_bail = false;
+        public float volume = .4f;
 
         public void OnChange()
         {

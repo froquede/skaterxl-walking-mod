@@ -17,6 +17,7 @@ namespace walking_mod
         FakeSkater fs;
         public string path = "";
         public Vector3 offset = new Vector3(0, -.73f, 0);
+        public Quaternion rotation_offset = Quaternion.Euler(0, 0, 0);
         CallBack callback;
         bool loop = true;
         GameObject copy;
@@ -30,6 +31,15 @@ namespace walking_mod
         {
             this.path = path;
             this.fs = fs;
+
+            LoadJSON();
+        }
+
+        public AnimController(string path, FakeSkater fs, Quaternion rotation_offset)
+        {
+            this.path = path;
+            this.fs = fs;
+            this.rotation_offset = rotation_offset;
 
             LoadJSON();
         }
@@ -96,7 +106,7 @@ namespace walking_mod
             }
 
             animation = new AnimationJSON((float)json_parsed["duration"], Newtonsoft.Json.JsonConvert.DeserializeObject<float[]>(json_parsed["times"].ToString()), parts);
-            UnityModManager.Logger.Log(animation.ToString());
+            UnityModManager.Logger.Log("Loaded " + animation.ToString() + " " + name);
         }
 
         float animTime = 0f;
@@ -137,7 +147,7 @@ namespace walking_mod
                             }*/
 
                             copy.transform.position = translateLocal(fs.self.transform, offset);
-                            copy.transform.rotation = fs.self.transform.rotation;
+                            copy.transform.rotation = rotateLocal(fs.self.transform, rotation_offset).rotation;
 
                             float step = count < crossfade ? Time.smoothDeltaTime * (48 / (crossfade - count)) : Time.smoothDeltaTime * 48f;
                             tpart.position = Vector3.Lerp(tpart.position, translateLocal(copy.transform, anim_position), step);
@@ -149,7 +159,7 @@ namespace walking_mod
                             tpart.rotation = Quaternion.Slerp(tpart.rotation, result.rotation, step);
                         }
                         catch {
-                            UnityModManager.Logger.Log("Catch error");
+                            UnityModManager.Logger.Log("Error playing frame");
                         }
                     }
                 }
