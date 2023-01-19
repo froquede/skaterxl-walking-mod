@@ -20,11 +20,9 @@ namespace walking_mod
         {
             harmonyInstance = new Harmony(modEntry.Info.Id);
 
-            go = new GameObject();
+            go = new GameObject("WalkingModGameObject");
             walking_go = go.AddComponent<WalkingController>();
-            UnityEngine.Object.DontDestroyOnLoad(walking_go);
             ui = go.AddComponent<gui>();
-            UnityEngine.Object.DontDestroyOnLoad(ui);
 
             modEntry.OnGUI = OnGUI;
             modEntry.OnSaveGUI = new Action<UnityModManager.ModEntry>(OnSaveGUI);
@@ -35,6 +33,9 @@ namespace walking_mod
             settings = UnityModManager.ModSettings.Load<Settings>(modEntry);
 
             UnityModManager.Logger.Log("Loaded " + modEntry.Info.Id);
+            UnityEngine.Object.DontDestroyOnLoad(go);
+            UnityEngine.Object.DontDestroyOnLoad(walking_go);
+            UnityEngine.Object.DontDestroyOnLoad(ui);
             return true;
         }
         static bool Unload(UnityModManager.ModEntry modEntry)

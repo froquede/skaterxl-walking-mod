@@ -24,7 +24,7 @@ namespace walking_mod
         public AnimController emote1, emote2, emote3, emote4;
         AnimController[] animations;
         AudioClip[] sounds;
-        AnimController actual_anim;
+        public AnimController actual_anim;
         public bool inState = false;
         GameObject fallbackCamera;
         GameObject fakeSkate;
@@ -57,16 +57,17 @@ namespace walking_mod
             SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
+        int walking_crossfade = 8;
         void InitAnimations()
         {
-            walking = new AnimController(Path.Combine(Main.modEntry.Path, "walking.json"), fs);
-            walking_backwards = new AnimController(Path.Combine(Main.modEntry.Path, "walking_backwards.json"), fs);
-            walking_left = new AnimController(Path.Combine(Main.modEntry.Path, "walking_left.json"), fs);
-            walking_right = new AnimController(Path.Combine(Main.modEntry.Path, "walking_right.json"), fs);
-            running = new AnimController(Path.Combine(Main.modEntry.Path, "running.json"), fs, true, 6);
-            running_backwards = new AnimController(Path.Combine(Main.modEntry.Path, "running_backwards.json"), fs);
-            running_left = new AnimController(Path.Combine(Main.modEntry.Path, "running_left.json"), fs);
-            running_right = new AnimController(Path.Combine(Main.modEntry.Path, "running_right.json"), fs);
+            walking = new AnimController(Path.Combine(Main.modEntry.Path, "walking.json"), fs, true, walking_crossfade);
+            walking_backwards = new AnimController(Path.Combine(Main.modEntry.Path, "walking_backwards.json"), fs, true, walking_crossfade);
+            walking_left = new AnimController(Path.Combine(Main.modEntry.Path, "walking_left.json"), fs, true, walking_crossfade);
+            walking_right = new AnimController(Path.Combine(Main.modEntry.Path, "walking_right.json"), fs, true, walking_crossfade);
+            running = new AnimController(Path.Combine(Main.modEntry.Path, "running.json"), fs, true, walking_crossfade);
+            running_backwards = new AnimController(Path.Combine(Main.modEntry.Path, "running_backwards.json"), fs, true, walking_crossfade);
+            running_left = new AnimController(Path.Combine(Main.modEntry.Path, "running_left.json"), fs, true, walking_crossfade);
+            running_right = new AnimController(Path.Combine(Main.modEntry.Path, "running_right.json"), fs, true, walking_crossfade);
             idle = new AnimController(Path.Combine(Main.modEntry.Path, "idle.json"), fs);
             jump = new AnimController(Path.Combine(Main.modEntry.Path, "jumping.json"), fs, false);
             running_jump = new AnimController(Path.Combine(Main.modEntry.Path, "running_jump.json"), fs, false, 1);
@@ -103,7 +104,7 @@ namespace walking_mod
         bool emoting = false;
         bool respawnSwitch = false;
         float limit_idle = .15f;
-        float decay = .7f;
+        float decay = .75f;
 
         Vector3 last_pos = Vector3.zero;
 
@@ -134,9 +135,13 @@ namespace walking_mod
 
         void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            //Log("Scene loaded: " + scene.name + " " + mode);
+            Log("Scene loaded: " + scene.name + " " + mode);
             resetStates();
             DestroyFS();
+            for (int i = 0; i < animations.Length; i++)
+            {
+                if (animations[i] == null) Log(i + " is null");
+            }
             // if (gameplay_disabled) EnableGameplay();
         }
 
@@ -158,11 +163,19 @@ namespace walking_mod
 
         void DestroyFS()
         {
-            fs.rb = null;
-            if (fs.self != null) Destroy(fs.self);
-            fs.self = null;
-            if (fakeSkate != null) Destroy(fakeSkate);
-            fakeSkate = null;
+            try
+            {
+                fs.rb = null;
+                if (fs.self != null) Destroy(fs.self);
+                fs.self = null;
+                if (fakeSkate != null) Destroy(fakeSkate);
+                fakeSkate = null;
+            } catch { 
+                Log("Error destroying fs");
+                fs.rb = null;
+                fs.self = null;
+                fakeSkate = null;
+            }
 
             original_bones = null;
         }
@@ -607,7 +620,11 @@ namespace walking_mod
             if (fs.self && fakeSkate)
             {
                 if (!skate_rb) skate_rb = fakeSkate.GetComponent<Rigidbody>();
-                if (deck_target == null) deck_target = new GameObject();
+                if (deck_target == null)
+                {
+                    deck_target = new GameObject();
+                    DontDestroyOnLoad(deck_target);
+                }
 
                 if (magnetized)
                 {
@@ -731,6 +748,11 @@ namespace walking_mod
             actual_state = "emoting";
         }
 
+        void RaycastPelvis()
+        {
+            
+        }
+
         public Vector3 last_offset = Vector3.zero;
         RaycastHit hit_body;
         bool grounded = true;
@@ -748,9 +770,8 @@ namespace walking_mod
             for (int i = 0; i < raycastCount; i++)
             {
                 float angle = 360f / raycastCount * i;
-                Quaternion rotation = Quaternion.Euler(0, angle, 0);
-                Vector3 direction = rotation * -fs.rb.transform.up;
-                Vector3 raycastOrigin = center_origin + Quaternion.Euler(0, angle, 0) * fs.rb.transform.right * (fs.collider.radius * 1.25f);
+                Vector3 direction = -fs.rb.transform.up;
+                Vector3 raycastOrigin = center_origin + Quaternion.Euler(0, angle, 0) * fs.rb.transform.right * fs.collider.radius;
                 Ray groundRay = new Ray(raycastOrigin, direction);
                 RaycastHit groundHit;
 
@@ -825,7 +846,11 @@ namespace walking_mod
         {
             if (inState)
             {
-                if (target == null) target = new GameObject();
+                if (target == null)
+                {
+                    target = new GameObject();
+                    DontDestroyOnLoad(target);
+                }
                 target.transform.position = fs.self.transform.position;
                 target.transform.rotation = Quaternion.Euler(0, fs.self.transform.rotation.eulerAngles.y, 0);
                 target.transform.Translate(0, .12f, -2.00f, Space.Self);
@@ -854,6 +879,7 @@ namespace walking_mod
                         fs.rb.interpolation = RigidbodyInterpolation.Interpolate;
                         fs.rb.angularVelocity = Vector3.zero;
                         fs.rb.velocity = PlayerController.Instance.skaterController.skaterRigidbody.velocity;
+                        fs.rb.maxDepenetrationVelocity = 10f;
                         UnityModManager.Logger.Log("Created RB");
                     }
                     catch
@@ -921,6 +947,7 @@ namespace walking_mod
             PlayerController.Instance.BoardFreezedAfterRespawn = false;
             MonoBehaviourSingleton<PlayerController>.Instance.respawn.SetSpawnPoint(respawnInfo);
             MonoBehaviourSingleton<PlayerController>.Instance.respawn.DoRespawn();
+            EventManager.Instance.EnterAir(respawnSwitch ? PopType.Switch : PopType.Ollie);
         }
 
         Transform[] original_bones;
@@ -1054,18 +1081,20 @@ namespace walking_mod
             }
         }
 
+        GameObject copy;
         Vector3 translateLocal(Transform origin, Vector3 offset)
         {
-            GameObject copy = new GameObject();
+            if (copy == null)
+            {
+                copy = new GameObject();
+                DontDestroyOnLoad(copy);
+            }
             copy.transform.position = origin.position;
             copy.transform.rotation = origin.rotation;
 
             copy.transform.Translate(offset, Space.Self);
 
             Vector3 result = copy.transform.position;
-
-            Destroy(copy);
-
             return result;
         }
 

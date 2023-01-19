@@ -98,10 +98,17 @@ namespace walking_mod
 
             if (lb)
             {
-                EllipsisText(new Rect((Screen.width / 60) + 156f, (Screen.height / 2) - 42.5f, 32, 85), Main.walking_go.emote3.name.ToUpper());
-                EllipsisText(new Rect((Screen.width / 60) + 16f, (Screen.height / 2) - 42.5f, 32, 85), Main.walking_go.emote1.name.ToUpper());
-                EllipsisText(new Rect((Screen.width / 60) + 61, (Screen.height / 2) - 87, 85, 32), Main.walking_go.emote4.name.ToUpper());
-                EllipsisText(new Rect((Screen.width / 60) + 61, (Screen.height / 2) + 53, 85, 32), Main.walking_go.emote2.name.ToUpper());
+                try
+                {
+                    EllipsisText(new Rect((Screen.width / 60) + 156f, (Screen.height / 2) - 42.5f, 32, 85), Main.walking_go.emote3.name.ToUpper());
+                    EllipsisText(new Rect((Screen.width / 60) + 16f, (Screen.height / 2) - 42.5f, 32, 85), Main.walking_go.emote1.name.ToUpper());
+                    EllipsisText(new Rect((Screen.width / 60) + 61, (Screen.height / 2) - 87, 85, 32), Main.walking_go.emote4.name.ToUpper());
+                    EllipsisText(new Rect((Screen.width / 60) + 61, (Screen.height / 2) + 53, 85, 32), Main.walking_go.emote2.name.ToUpper());
+                }
+                catch
+                {
+                    UnityModManager.Logger.Log("Error ui " + (Main.walking_go.emote3 == null));
+                }
             }
         }
 

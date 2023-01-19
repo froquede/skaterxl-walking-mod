@@ -9,7 +9,7 @@ namespace walking_mod
 {
     public delegate void CallBack();
 
-    public class AnimController : MonoBehaviour
+    public class AnimController
     {
         public bool isPlaying = false;
 
@@ -114,7 +114,11 @@ namespace walking_mod
 
         public void FixedUpdate()
         {
-            if (copy == null) copy = new GameObject();
+            if (copy == null)
+            {
+                copy = new GameObject();
+                UnityEngine.Object.DontDestroyOnLoad(copy);
+            }
             if (fs.self && isPlaying)
             {
                 int index = 0;
@@ -156,7 +160,7 @@ namespace walking_mod
                             /*result.Rotate(90, 0, 0, Space.Self); // mixamo
                             result.Rotate(0, -90, 0, Space.Self);*/ // mixamo
 
-                            tpart.rotation = Quaternion.Slerp(tpart.rotation, result.rotation, step);
+                            tpart.rotation = Quaternion.Slerp(tpart.rotation, result.rotation, step * 1.1f);
                         }
                         catch {
                             UnityModManager.Logger.Log("Error playing frame");
@@ -184,33 +188,38 @@ namespace walking_mod
             return (value - min) * 1f / (max - min);
         }
 
+        GameObject translate_local_go;
         public Vector3 translateLocal(Transform origin, Vector3 offset)
         {
-            GameObject copy = new GameObject();
-            copy.transform.position = origin.position;
-            copy.transform.rotation = origin.rotation;
+            if (translate_local_go == null)
+            {
+                translate_local_go = new GameObject();
+                UnityEngine.Object.DontDestroyOnLoad(translate_local_go);
+            }
 
-            copy.transform.Translate(offset, Space.Self);
+            translate_local_go.transform.position = origin.position;
+            translate_local_go.transform.rotation = origin.rotation;
 
-            Vector3 result = copy.transform.position;
+            translate_local_go.transform.Translate(offset, Space.Self);
 
-            Destroy(copy);
-
+            Vector3 result = translate_local_go.transform.position;
             return result;
         }
 
+        GameObject rotate_local_go;
         Transform rotateLocal(Transform origin, Quaternion offset)
         {
-            GameObject copy = new GameObject();
-            copy.transform.position = origin.position;
-            copy.transform.rotation = origin.rotation;
+            if (rotate_local_go == null)
+            {
+                rotate_local_go = new GameObject();
+                UnityEngine.Object.DontDestroyOnLoad(rotate_local_go);
+            }
+            rotate_local_go.transform.position = origin.position;
+            rotate_local_go.transform.rotation = origin.rotation;
 
-            copy.transform.Rotate(offset.eulerAngles, Space.Self);
+            rotate_local_go.transform.Rotate(offset.eulerAngles, Space.Self);
 
-            Transform result = copy.transform;
-
-            Destroy(copy);
-
+            Transform result = rotate_local_go.transform;
             return result;
         }
 
