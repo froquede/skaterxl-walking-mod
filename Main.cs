@@ -53,15 +53,44 @@ namespace walking_mod
         private static void OnGUI(UnityModManager.ModEntry modEntry)
         {
             GUILayout.BeginVertical(GUILayout.Width(256));
-
-            GUILayout.BeginVertical();
-            GUILayout.Label("Volume");
-            settings.volume = GUILayout.HorizontalScrollbar(settings.volume, .1f, 0f, 1f);
+                GUILayout.BeginVertical();
+                    GUILayout.Label("Volume");
+                    settings.volume = GUILayout.HorizontalScrollbar(settings.volume, .1f, 0f, 1f);
+                GUILayout.EndVertical();
             GUILayout.EndVertical();
 
-            GUILayout.Space(12);
+            GUILayout.BeginVertical(GUILayout.Width(420));
+            GUILayout.Space(6);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Throwdown force", GUILayout.Width(100));
+            settings.throwdown_force = GUILayout.HorizontalScrollbar(settings.throwdown_force, .1f, 0f, 30f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.throwdown_force = 18f;
+            GUILayout.EndHorizontal();
 
-            if (!settings.experimental_bail)
+            GUILayout.Space(6);
+            GUILayout.BeginVertical();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Camera offset x", GUILayout.Width(100));
+            settings.camera_offset.x = GUILayout.HorizontalScrollbar(settings.camera_offset.x, .1f, -4f, 4f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.camera_offset.x = .05f;
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Camera offset y", GUILayout.Width(100));
+            settings.camera_offset.y = GUILayout.HorizontalScrollbar(settings.camera_offset.y, .1f, -4f, 4f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.camera_offset.y = .12f;
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Camera offset z", GUILayout.Width(100));
+            settings.camera_offset.z = GUILayout.HorizontalScrollbar(settings.camera_offset.z, .1f, -4f, 4f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.camera_offset.z = -1.3f;
+            GUILayout.EndHorizontal();
+
+            GUILayout.EndVertical();
+
+            /*if (!settings.experimental_bail)
             {
                 if (GUILayout.Button("Enable experimental multiplayer on bail", GUILayout.Height(42))) {
                     settings.experimental_bail = true;
@@ -73,7 +102,7 @@ namespace walking_mod
                 {
                     settings.experimental_bail = false;
                 }
-            }
+            }*/
             GUILayout.EndVertical();
             settings.Draw(modEntry);
         }

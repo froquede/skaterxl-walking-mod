@@ -21,6 +21,7 @@ namespace walking_mod
         CallBack callback;
         bool loop = true;
         GameObject copy;
+        public bool anchorRoot = false;
 
         public AnimController()
         {
@@ -49,6 +50,16 @@ namespace walking_mod
             this.path = path;
             this.fs = fs;
             this.loop = loop;
+
+            LoadJSON();
+        }
+
+        public AnimController(string path, FakeSkater fs, bool loop, bool anchorRoot)
+        {
+            this.path = path;
+            this.fs = fs;
+            this.loop = loop;
+            this.anchorRoot = anchorRoot;
 
             LoadJSON();
         }
@@ -107,10 +118,17 @@ namespace walking_mod
 
             animation = new AnimationJSON((float)json_parsed["duration"], Newtonsoft.Json.JsonConvert.DeserializeObject<float[]>(json_parsed["times"].ToString()), parts);
             UnityModManager.Logger.Log("Loaded " + animation.ToString() + " " + name);
+
+            Type type_pelvis = typeof(AnimationJSONParts);
+            var prop_pelvis = type_pelvis.GetProperty("Skater_pelvis");
+            AnimationJSONPart pelvis = (AnimationJSONPart)prop_pelvis.GetValue(animation.parts, null);
+            first_frame_pelvis = new Vector3(pelvis.position[0][0], pelvis.position[0][1], pelvis.position[0][2]);
         }
 
         float animTime = 0f;
         public int frame = 0, count = 0, crossfade = 16;
+        Vector3 first_frame_pelvis;
+        public bool anchorRootFade = true;
 
         public void FixedUpdate()
         {
@@ -132,6 +150,18 @@ namespace walking_mod
                 if (count < crossfade) index = 0;
                 frame = index;
 
+                float step = count < crossfade ? Time.smoothDeltaTime * (48 / crossfade) : Time.smoothDeltaTime * 48f;
+
+                Type type_pelvis = typeof(AnimationJSONParts);
+                var prop_pelvis = type_pelvis.GetProperty("Skater_pelvis");
+                AnimationJSONPart pelvis = (AnimationJSONPart)prop_pelvis.GetValue(animation.parts, null);
+                if (anchorRoot)
+                {
+                    if (anchorRootFade) offset = Vector3.Lerp(offset, new Vector3(-(pelvis.position[frame][0] - first_frame_pelvis.x), -.73f - (pelvis.position[frame][1] - first_frame_pelvis.y), -(pelvis.position[frame][2] - first_frame_pelvis.z)), Time.smoothDeltaTime * 12f);
+                    else offset = new Vector3(-(pelvis.position[frame][0] - first_frame_pelvis.x), -.73f - (pelvis.position[frame][1] - first_frame_pelvis.y), -(pelvis.position[frame][2] - first_frame_pelvis.z));
+                }
+                
+
                 foreach (string part in fs.bones)
                 {
                     Transform tpart = fs.getPart(part);
@@ -144,23 +174,16 @@ namespace walking_mod
                             AnimationJSONPart apart = (AnimationJSONPart)property.GetValue(animation.parts, null);
                             Vector3 anim_position = new Vector3(apart.position[index][0], apart.position[index][1], apart.position[index][2]);
 
-                            /*if (count == 0 && frame == 0 && crossfade != 1)
-                            {
-                                crossfade = (int)Vector3.Distance(tpart.transform.position, anim_position);
-                                crossfade = crossfade > 16 ? 16 : crossfade;
-                            }*/
-
                             copy.transform.position = translateLocal(fs.self.transform, offset);
                             copy.transform.rotation = rotateLocal(fs.self.transform, rotation_offset).rotation;
 
-                            float step = count < crossfade ? Time.smoothDeltaTime * (48 / (crossfade - count)) : Time.smoothDeltaTime * 48f;
                             tpart.position = Vector3.Lerp(tpart.position, translateLocal(copy.transform, anim_position), step);
                             Transform result = rotateLocal(copy.transform, new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]));
 
                             /*result.Rotate(90, 0, 0, Space.Self); // mixamo
                             result.Rotate(0, -90, 0, Space.Self);*/ // mixamo
 
-                            tpart.rotation = Quaternion.Slerp(tpart.rotation, result.rotation, step * 1.1f);
+                            tpart.rotation = Quaternion.Slerp(tpart.rotation, result.rotation, step * 1.125f);
                         }
                         catch {
                             UnityModManager.Logger.Log("Error playing frame");
@@ -172,7 +195,9 @@ namespace walking_mod
 
                 if (animTime > animation.duration) {
                     if (loop) animTime = 0;
-                    else isPlaying = false;
+                    else {
+                        isPlaying = false;
+                    }
 
                     if (callback != null)
                     {
