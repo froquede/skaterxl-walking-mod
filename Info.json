@@ -2,7 +2,7 @@
   "Id": "walking-mod",
   "DisplayName": "Walking Mod",
   "Author": "froquede",
-  "Version": "0.5.0",
+  "Version": "0.5.2",
   "ManagerVersion": "0.22.5.0",
   "Requirements": [],
   "LoadAfter": [ "XLGearModifier" ],

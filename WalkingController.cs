@@ -10,6 +10,7 @@ using SkaterXL.Core;
 using SkaterXL.Data;
 using SkaterXL.Multiplayer;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -37,6 +38,7 @@ namespace walking_mod
         PlayTime playtimeobj;
         public List<string> emotes;
         IDictionary<string, AnimController> cache = new Dictionary<string, AnimController>();
+        public string last_animation = "";
 
         void Start()
         {
@@ -79,7 +81,7 @@ namespace walking_mod
             }
         }
 
-        int walking_crossfade = 4;
+        int walking_crossfade = 1;
         void InitAnimations()
         {
             walking = LoadAnim(new AnimController(Path.Combine(Main.modEntry.Path, "animations\\walking.json"), fs, true, walking_crossfade));
@@ -111,6 +113,7 @@ namespace walking_mod
             back_flip = LoadAnim(new AnimController(Path.Combine(Main.modEntry.Path, "animations\\back_flip.json"), fs, false, true));
 
             throwdown = LoadAnim(new AnimController(Path.Combine(Main.modEntry.Path, "animations\\throwdown.json"), fs, false, true));
+            throwdown.speed = 1.1f;
             falling = LoadAnim(new AnimController(Path.Combine(Main.modEntry.Path, "animations\\falling.json"), fs, Quaternion.Euler(-37.5f, 0, 0)));
             falling.crossfade = 6;
             falling.anchorRoot = true;
@@ -140,17 +143,17 @@ namespace walking_mod
             step4 = GetClip(Path.Combine(Main.modEntry.Path, "sounds\\footstep_d.wav"));
         }
 
-        public float speed = 8.75f;
+        public float speed = 10f;
         public float jumpForce = 10.0f;
         public Vector3 velocity;
         bool jumping = false, throwdown_state = false;
         int press_count = 0;
         string actual_state = "";
-        float max_speed = 8f;
-        float running_speed = 4f;
+        float max_speed = 50f;
+        float running_speed = 3.9f;
         bool emoting = false;
         bool respawnSwitch = false;
-        float limit_idle = .15f;
+        float limit_idle = .3f;
         float decay = .95f;
 
         Vector3 last_pos = Vector3.zero;
@@ -163,7 +166,7 @@ namespace walking_mod
             else inPlayStateLogic();
         }
 
-        bool should_run = false;
+        bool should_run = false, throwed = false;
         void Update()
         {
             if (GameStateMachine.Instance.CurrentState.GetType() != typeof(PlayState) && GameStateMachine.Instance.CurrentState.GetType() != typeof(PauseState))
@@ -180,6 +183,13 @@ namespace walking_mod
                 if (!PlayerController.Instance.inputController.enabled) PlayerController.Instance.inputController.enabled = true;
             }
             else should_run = true;
+
+            if (PlayerController.Instance.respawn.respawning)
+            {
+                Traverse.Create(playtimeobj).Field("isInPlayState").SetValue(false);
+                Traverse.Create(ReplayRecorder.Instance.LocalPlayerFrames[ReplayRecorder.Instance.LocalPlayerFrames.Count - 1]).Field("didRespawn").SetValue(false);
+            }
+            else if (GameStateMachine.Instance.CurrentState.GetType() == typeof(PlayState)) Traverse.Create(playtimeobj).Field("isInPlayState").SetValue(true);
 
             if (!inState) Throwdown();
         }
@@ -289,13 +299,14 @@ namespace walking_mod
             //PlayerController.Instance.DisableGameplay();
             SoundManager.Instance.deckSounds.MuteAll();
             GameStateMachine.Instance.PinObject.SetActive(false);
+            /*MonoBehaviourSingleton<PlayerController>.Instance.respawn.DoRespawn();*/
             TogglePlayObject(false);
             ReplaceBones(false);
             gameplay_disabled = true;
             last_nonplaytime = (float)Traverse.Create(playtimeobj).Field("nonPlayTime").GetValue();
             PlayerController.Instance.inputController.enabled = false;
 
-            PlayerController.Instance.ForceBail();
+            if (MultiplayerManager.Instance.InRoom) PlayerController.Instance.ForceBail();
         }
 
         void EnableGameplay()
@@ -324,7 +335,7 @@ namespace walking_mod
 
         Quaternion EnsureQuaternionContinuity(Quaternion last, Quaternion curr)
         {
-            if (last.x * curr.x + last.y * curr.y + last.z * curr.z + last.w * curr.w < 0f)
+            if ((throwdown_state || updating || check_velocity) && last.x * curr.x + last.y * curr.y + last.z * curr.z + last.w * curr.w < 0f)
             {
                 return new Quaternion(-curr.x, -curr.y, -curr.z, -curr.w);
             }
@@ -346,6 +357,7 @@ namespace walking_mod
         Vector3 relativeVelocity;
         Quaternion last_rotation_offset = Quaternion.Euler(0, 0, 0);
         Vector3 last_velocity;
+        float rotation_speed = 8f;
         void inStateLogic()
         {
             if (!fs.self || !fs.rb || !fakeSkate)
@@ -354,18 +366,20 @@ namespace walking_mod
                 return;
             }
 
+            if (GameStateMachine.Instance.CurrentState.GetType() == typeof(PauseState)) return;
+
             if (relativeVelocity != Vector3.zero && Mathf.Lerp(last_velocity.magnitude, fs.rb.velocity.magnitude, .5f) > limit_idle && instate_count >= 24)
             {
                 if (!Sideway() && !Rotating() && !jumping && actual_state != "falling" && actual_state != "idle")
                 {
-                    actual_anim.rotation_offset = Quaternion.Slerp(last_rotation_offset, Quaternion.LookRotation(backwards ? relativeVelocity : -relativeVelocity), Time.smoothDeltaTime * 12f);
+                    actual_anim.rotation_offset = Quaternion.Slerp(last_rotation_offset, Quaternion.LookRotation(backwards ? relativeVelocity : -relativeVelocity), Time.smoothDeltaTime * rotation_speed);
                 }
                 else
                 {
                     if (Sideway())
                     {
                         Quaternion lr = Quaternion.LookRotation(relativeVelocity);
-                        actual_anim.rotation_offset = Quaternion.Slerp(last_rotation_offset, Quaternion.Euler(lr.eulerAngles.x, lr.eulerAngles.y + (relativeVelocity.x > 0 ? -90 : 90), lr.eulerAngles.z), Time.smoothDeltaTime * 12f);
+                        actual_anim.rotation_offset = Quaternion.Slerp(last_rotation_offset, Quaternion.Euler(lr.eulerAngles.x, lr.eulerAngles.y + (relativeVelocity.x > 0 ? -90 : 90), lr.eulerAngles.z), Time.smoothDeltaTime * rotation_speed);
                     }
                     else
                     {
@@ -374,17 +388,17 @@ namespace walking_mod
                             if (actual_state != "idle")
                             {
                                 Quaternion lr = Quaternion.LookRotation(backwards ? relativeVelocity : -relativeVelocity);
-                                actual_anim.rotation_offset = Quaternion.Slerp(last_rotation_offset, Quaternion.Euler(0, lr.eulerAngles.y, 0), Time.smoothDeltaTime * 12f);
+                                actual_anim.rotation_offset = Quaternion.Slerp(last_rotation_offset, Quaternion.Euler(0, lr.eulerAngles.y, 0), Time.smoothDeltaTime * rotation_speed);
                             }
                         }
                         else
                         {
-                            if (actual_anim.name != falling.name) actual_anim.rotation_offset = Quaternion.Slerp(last_rotation_offset, Quaternion.identity, Time.smoothDeltaTime * 12f);
+                            if (actual_anim.name != falling.name) actual_anim.rotation_offset = Quaternion.Slerp(last_rotation_offset, Quaternion.identity, Time.smoothDeltaTime * rotation_speed);
                         }
                     }
                 }
             }
-            else actual_anim.rotation_offset = Quaternion.Slerp(last_rotation_offset, Quaternion.identity, Time.smoothDeltaTime * 12f);
+            else actual_anim.rotation_offset = Quaternion.Slerp(last_rotation_offset, Quaternion.identity, Time.smoothDeltaTime * rotation_speed);
             last_rotation_offset = actual_anim.rotation_offset;
 
             try { actual_anim.FixedUpdate(); } catch { UnityModManager.Logger.Log("Error updating animation " + inState); }
@@ -591,6 +605,7 @@ namespace walking_mod
         }
 
         Quaternion cam_rotation = Quaternion.Euler(0, 0, 0);
+        Quaternion last_rotation;
         void Movement()
         {
             if (fs.rb)
@@ -598,15 +613,16 @@ namespace walking_mod
                 move = transform.right * LX + transform.forward * LY;
                 Physics.SyncTransforms();
                 fs.rb.AddForce(-fs.rb.velocity * decay);
-                if (!emoting) fs.rb.MoveRotation(Quaternion.Euler(fs.rb.rotation.eulerAngles.x, fs.rb.rotation.eulerAngles.y + (actual_state == "idle" ? RX : actual_state == "walking" ? RX / 1.5F : RX / 2.5F), fs.rb.rotation.eulerAngles.z));
+                if (!emoting) fs.rb.MoveRotation(Quaternion.Euler(fs.rb.rotation.eulerAngles.x, fs.rb.rotation.eulerAngles.y + (actual_state == "idle" ? RX : RX / 1.5F), fs.rb.rotation.eulerAngles.z));
 
                 if (!emoting && (LX != 0 || LY != 0)) cam_rotation = Quaternion.Euler(0, 0, 0);
 
                 if (fs.rb.velocity.magnitude <= max_speed && !grinding)
                 {
-                    fs.rb.AddRelativeForce(move * speed);
+                    fs.rb.AddRelativeForce(move * (speed * (actual_state == "running" ? 1.1f : 1f)));
                 }
 
+                last_rotation = fs.self.transform.rotation;
                 /*if(grinding)*/
             }
         }
@@ -774,11 +790,11 @@ namespace walking_mod
         {
             if (actual_anim.name == front_flip.name && front_flip.frame == 16) fs.rb.AddRelativeForce(0, 3f, 0, ForceMode.Impulse);
 
-            if (actual_anim.name == back_flip.name && back_flip.frame == 9) fs.rb.AddRelativeForce(0, 3f, 0, ForceMode.Impulse);
+            if (actual_anim.name == back_flip.name && back_flip.frame == 9) fs.rb.AddRelativeForce(0, 3.2f, 0, ForceMode.Impulse);
 
             if (actual_anim.name == running_jump.name || actual_anim.name == running_jump.name)
             {
-                if (running_jump.frame == 1) fs.rb.AddRelativeForce(0, 2f, 0, ForceMode.Impulse);
+                if (running_jump.frame == 1) fs.rb.AddRelativeForce(0, 2.5f, 0, ForceMode.Impulse);
             }
 
             if (actual_anim.name == jump.name || actual_anim.name == jump.name)
@@ -826,9 +842,9 @@ namespace walking_mod
                             deck_target.transform.Rotate(90f, 0, 0, Space.Self);
                             deck_target.transform.Rotate(0, 0, -90f, Space.Self);
                             deck_target.transform.Rotate(0, -45f, 0, Space.Self);
-                            deck_target.transform.Rotate(0, 180f, 0, Space.Self);
+                            deck_target.transform.Rotate(0, respawnSwitch ? 0f : 180f, 0, Space.Self);
 
-                            if (throwdown.frame >= 36) deck_target.transform.Rotate(60, 0, 0, Space.Self);
+                            if (throwdown.frame >= 36) deck_target.transform.Rotate(respawnSwitch ? -60 : 60, 0, 0, Space.Self);
                         }
                         else
                         {
@@ -836,7 +852,7 @@ namespace walking_mod
                         }
                         if (throwdown_anim)
                         {
-                            if (throwdown.frame < 36) deck_target.transform.Translate(0, -.1f, -.4f, Space.Self);
+                            if (throwdown.frame < 36) deck_target.transform.Translate(0, -.1f, respawnSwitch ? .4f : -.4f, Space.Self);
                             else deck_target.transform.Translate(0, -.6f, 0, Space.Self);
                         }
                         else deck_target.transform.Translate(-.225f, .035f, -.1f, Space.Self);
@@ -875,32 +891,45 @@ namespace walking_mod
                 actual_state = "throwdown";
                 respawnSwitch = PlayerController.Instance.inputController.player.GetButtonDown("LT");
                 magnetized = true;
+                throwed = true;
             }
+        }
+
+        float map01(float value, float min, float max)
+        {
+            return (value - min) * 1f / (max - min);
         }
 
         public Transform[] fingers;
         void inPlayStateLogic()
         {
+            fallbackCamera.transform.position = main_cam.transform.position;
+            fallbackCamera.transform.rotation = main_cam.transform.rotation;
+
             if (PlayerController.Instance.inputController.player.GetButton("A") && PlayerController.Instance.inputController.player.GetButton("X"))
             {
                 press_count++;
                 if (press_count >= 12)
                 {
+
+                    Vector3 old_pos = PlayerController.Instance.skaterController.animBoardTargetTransform.position;
+                    Quaternion old_rot = PlayerController.Instance.skaterController.skaterTransform.rotation;
+
                     DisableGameplay();
                     DestroyFS();
                     createFS();
+                    inState = true;
 
                     cam_rotation = Quaternion.Euler(0, 0, 0);
                     fingers = (from t in fs.getPart("Skater_hand_l").GetComponentsInChildren<Transform>()
                                where !t.name.Contains("hand")
                                select t).Union(from t in fs.getPart("Skater_hand_r").GetComponentsInChildren<Transform>()
                                                where !t.name.Contains("hand")
-                                               select t).ToArray<Transform>();
+                                               select t).ToArray();
 
                     press_count = 0;
-                    inState = true;
-                    fs.self.transform.position = PlayerController.Instance.skaterController.skaterTransform.position - new Vector3(0, .2f, 0);
-                    fs.self.transform.rotation = PlayerController.Instance.skaterController.skaterTransform.rotation;
+                    fs.self.transform.position = old_pos + new Vector3(0, .73f, 0);
+                    fs.self.transform.rotation = old_rot;
 
                     if (PlayerController.Instance.IsSwitch) fs.self.transform.Rotate(0, 180, 0, Space.Self);
 
@@ -910,19 +939,21 @@ namespace walking_mod
                     jumping = false;
                     magnetized = true;
                     actual_state = "idle";
+                    last_animation = "idle";
                     Play(idle);
                     set_bail = false;
                     last_pos = fs.self.transform.position;
                     instate_count = 0;
+
+                    MonoBehaviourSingleton<PlayerController>.Instance.respawn.DoRespawn();
                 }
             }
             else
             {
                 press_count = 0;
-            }
+            }           
 
-            fallbackCamera.transform.position = main_cam.transform.position;
-            fallbackCamera.transform.rotation = main_cam.transform.rotation;
+            //Throwdown();
         }
 
         void PlayEmote(AnimController target)
@@ -1084,6 +1115,7 @@ namespace walking_mod
                         fs.rb.angularVelocity = Vector3.zero;
                         fs.rb.velocity = PlayerController.Instance.skaterController.skaterRigidbody.velocity;
                         fs.rb.maxDepenetrationVelocity = 10f;
+                        fs.rb.mass = 1.25f;
                         UnityModManager.Logger.Log("Created RB");
                     }
                     catch
@@ -1103,43 +1135,88 @@ namespace walking_mod
         }
 
         bool aborted = false;
+        int respawn_delay = 0;
+        bool pushed = false;
+        IEnumerator pushCoroutine;
+
+        public void AddPushForce(float p_value)
+        {
+            pushCoroutine = PushOverTime(p_value);
+            base.StartCoroutine(pushCoroutine);
+        }
+
+        IEnumerator PushOverTime(float p_value)
+        {
+            MonoBehaviourSingleton<PlayerController>.Instance.BoardFreezedAfterRespawn = false;
+
+            p_value /= 10f;
+            int _frame = 0;
+            while (_frame < 10)
+            {
+                int num = _frame;
+                _frame = num + 1;
+                if (PlayerController.Instance.boardController.boardRigidbody.velocity.magnitude < MonoBehaviourSingleton<PlayerController>.Instance.topSpeed)
+                {
+                    if (PlayerController.Instance.boardController.boardRigidbody.velocity.magnitude < 0.15f)
+                    {
+                        if (Vector3.Angle(MonoBehaviourSingleton<PlayerController>.Instance.PlayerForward(), MonoBehaviourSingleton<PlayerController>.Instance.cameraController._actualCam.forward) < 90f)
+                        {
+                            PlayerController.Instance.boardController.boardRigidbody.AddForce(MonoBehaviourSingleton<PlayerController>.Instance.PlayerForward() * p_value * 1.4f, ForceMode.Impulse);
+                        }
+                        else
+                        {
+                            PlayerController.Instance.boardController.boardRigidbody.AddForce(-MonoBehaviourSingleton<PlayerController>.Instance.PlayerForward() * p_value * 1.4f, ForceMode.Impulse);
+                        }
+                    }
+                    else
+                    {
+                        PlayerController.Instance.boardController.boardRigidbody.AddForce(PlayerController.Instance.boardController.boardRigidbody.velocity.normalized * p_value, ForceMode.Impulse);
+                    }
+                }
+                yield return new WaitForFixedUpdate();
+            }
+            yield break;
+        }
+
         void Throwdown()
         {
-            if (check_velocity)
+            if (check_velocity && respawn_delay >= 1)
             {
-                if (!aborted)
-                {
-                    /*PlayerController.Instance.CancelInvoke("DoBail");
-                    PlayerController.Instance.respawn.CancelInvoke("DoRespawn");
-                    PlayerController.Instance.respawn.CancelInvoke("PuppetMasterModeActive");
-                    PlayerController.Instance.respawn.CancelInvoke("EnableBoardPhysics");
-                    PlayerController.Instance.respawn.CancelInvoke("EndRecentRespawn");
-                    PlayerController.Instance.respawn.CancelInvoke("DelayPress");
-                    PlayerController.Instance.respawn.CancelInvoke("EndRespawning");
-                    PlayerController.Instance.respawn.Invoke("EnableBoardPhysics", 0f);
-                    PlayerController.Instance.respawn.Invoke("EndRespawning", 0f);
-                    PlayerController.Instance.respawn.Invoke("DelayPress", 0f);
-                    PlayerController.Instance.respawn.Invoke("PuppetMasterModeActive", 0f);
-                    PlayerController.Instance.respawn.Invoke("EndRecentRespawn", 0f);
-                    aborted = true;*/
-                }
+                //AddPushForce(PlayerController.Instance.GetPushForce() * (.4f + (-relativeVelocity.z * Main.settings.throwdown_force)));
+                if (PlayerController.Instance.boardController.GroundCheck()) check_velocity = false;
+                PlayerController.Instance.inputController.enabled = true;
+                PlayerController.Instance.respawn.SetSpawnPoint(last_nr, Respawn.SpawnPointChangeMethod.Auto);
+                AddPushForce(PlayerController.Instance.GetPushForce() * (.35f + (-relativeVelocity.z * Main.settings.throwdown_force)));
 
-                if (PlayerController.Instance.boardController.boardRigidbody.velocity.magnitude <= (limit_idle * 2))
+                /*Log("Checking " + PlayerController.Instance.boardController.boardRigidbody.velocity.magnitude + " " + (limit_idle * 1.25f));
+                if (PlayerController.Instance.boardController.boardRigidbody.velocity.magnitude <= (limit_idle * 1.25f))
                 {
-                    PlayerController.Instance.AddPushForce(PlayerController.Instance.GetPushForce() * (.5f + (-relativeVelocity.z * Main.settings.throwdown_force)));
+                    PlayerController.Instance.skaterController.skaterTargetTransform.position = MonoBehaviourSingleton<PlayerController>.Instance.skaterController.animBoardTargetTransform.position;
+                    PlayerController.Instance.skaterController.skaterTargetTransform.rotation = PlayerController.Instance.skaterController.skaterTransform.rotation;
+
+                    float force = PlayerController.Instance.GetPushForce() * (.4f + (-relativeVelocity.z * Main.settings.throwdown_force));
+                    //PlayerController.Instance.boardController.boardRigidbody.AddForce(force * PlayerController.Instance.boardController.boardRigidbody.transform.forward, ForceMode.VelocityChange);
+
+                    AddPushForce(PlayerController.Instance.GetPushForce() * (.4f + (-relativeVelocity.z * Main.settings.throwdown_force)));
+                    pushed = true;
                 }
-                else check_velocity = false;
+                else
+                {
+                    check_velocity = false;
+                    PlayerController.Instance.inputController.enabled = true;
+                    PlayerController.Instance.respawn.SetSpawnPoint(last_nr, Respawn.SpawnPointChangeMethod.Auto);
+                    SoundManager.Instance.deckSounds.UnMuteAll();
+                    S
+                oundManager.Instance.ragdollSounds.MuteRagdollSounds(false);
+                }*/
             }
 
-            if (updating)
+            if (updating && respawn_delay >= 0)
             {
                 updating = false;
                 check_velocity = true;
                 aborted = false;
-
-                PlayerController.Instance.respawn.respawning = false;
-
-                PlayerController.Instance.respawn.SetSpawnPoint(last_nr, Respawn.SpawnPointChangeMethod.Auto);
+                pushed = false;
 
                 //SoundManager.Instance.StopBearingSound();
                 SoundManager.Instance.StopGrindSound(0f);
@@ -1148,7 +1225,17 @@ namespace walking_mod
                 //DeckSounds.Instance.StopBearingSounds();
                 DeckSounds.Instance.powerslideLoopSource.Stop();
                 DeckSounds.Instance.powerslideLoopSource2.Stop();
+
+                EventManager.Instance.EnterAir(respawnSwitch ? PopType.Switch : PopType.Ollie);
             }
+
+
+            if (updating || check_velocity)
+            {
+                respawn_delay++;
+                Traverse.Create(ReplayRecorder.Instance.LocalPlayerFrames[ReplayRecorder.Instance.LocalPlayerFrames.Count - 1]).Field("didRespawn").SetValue(false);
+            }
+            else respawn_delay = 0;
         }
 
         void OnJumpEnd()
@@ -1176,15 +1263,19 @@ namespace walking_mod
 
             UpdateGameplay();
             EnableGameplay();
+            PlayerController.Instance.inputController.enabled = false;
             MonoBehaviourSingleton<PlayerController>.Instance.respawn.SetSpawnPoint(respawnInfo);
             MonoBehaviourSingleton<PlayerController>.Instance.respawn.DoRespawn();
+            Traverse.Create(ReplayRecorder.Instance.LocalPlayerFrames[ReplayRecorder.Instance.LocalPlayerFrames.Count - 1]).Field("didRespawn").SetValue(false);
+            SoundManager.Instance.deckSounds.UnMuteAll();
+            SoundManager.Instance.ragdollSounds.MuteRagdollSounds(false);
+            PlayerController.Instance.boardController.boardRigidbody.isKinematic = false;
+            PlayerController.Instance.boardController.boardRigidbody.useGravity = true;
 
-            MonoBehaviourSingleton<PlayerController>.Instance.ResetAllAnimations();
-            MonoBehaviourSingleton<PlayerController>.Instance.AnimGrindTransition(false);
-            MonoBehaviourSingleton<PlayerController>.Instance.AnimOllieTransition(false);
-            MonoBehaviourSingleton<PlayerController>.Instance.AnimSetupTransition(false);
-
-            EventManager.Instance.EnterAir(respawnSwitch ? PopType.Switch : PopType.Ollie);
+            PlayerController.Instance.respawn.behaviourPuppet.BoostImmunity(1000f);
+            PlayerController.Instance.boardController.ResetCenterOfMass();
+            PlayerController.Instance.boardController.boardRigidbody.angularVelocity = Vector3.zero;
+            PlayerController.Instance.boardController.boardRigidbody.AddForce((respawnSwitch ? -PlayerController.Instance.PlayerForward() : PlayerController.Instance.PlayerForward()) * (15f + (20 * -relativeVelocity.z * Main.settings.throwdown_force)), ForceMode.Impulse);
         }
 
 
@@ -1194,12 +1285,17 @@ namespace walking_mod
             PlayerController.Instance.skaterController.skaterTransform.rotation = fs.self.transform.rotation;
             PlayerController.Instance.boardController.boardTransform.position = fakeSkate.transform.position;
             PlayerController.Instance.boardController.boardTransform.rotation = fakeSkate.transform.rotation;
+            PlayerController.Instance.comController.transform.position = fs.self.transform.position;
+            PlayerController.Instance.comController.transform.rotation = fs.self.transform.rotation;
             PlayerController.Instance.comController.COMRigidbody.position = fs.self.transform.position;
             PlayerController.Instance.comController.COMRigidbody.transform.position = fs.self.transform.position;
             PlayerController.Instance.skaterController.leanProxy.position = fs.self.transform.position;
             PlayerController.Instance.skaterController.leanProxy.transform.position = fs.self.transform.position;
             PlayerController.Instance.skaterController.leanProxy.rotation = fs.rb.transform.forward != Vector3.zero ? Quaternion.LookRotation(fs.rb.transform.forward) : Quaternion.identity;
             PlayerController.Instance.skaterController.leanProxy.transform.rotation = fs.rb.transform.forward != Vector3.zero ? Quaternion.LookRotation(fs.rb.transform.forward) : Quaternion.identity;
+
+            PlayerController.Instance.skaterController.skaterTargetTransform.position = MonoBehaviourSingleton<PlayerController>.Instance.skaterController.animBoardTargetTransform.position;
+            PlayerController.Instance.skaterController.skaterTargetTransform.rotation = PlayerController.Instance.skaterController.skaterTransform.rotation;
         }
 
         Transform[] original_bones;
