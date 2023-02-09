@@ -11,7 +11,7 @@ namespace walking_mod
 {
     class gui : MonoBehaviour
     {
-        public bool visible = true, emote_config = false;
+        public bool visible = true, emote_config = false, sound_emote_config = false;
         Texture2D circularTexture, bg_center, select_right, select_left, select_up, select_down, dpad_icon, user_icon, sound_icon;
         Texture2D list_bg, selected_bg, change_emote_btn, confirm_btn, cancel_btn, dpad_input;
         private Rect windowRect = new Rect((Screen.width / 60), (Screen.width / 60), 200, 200);
@@ -189,6 +189,23 @@ namespace walking_mod
                 }
 
                 if (show_change_btn) GUI.DrawTexture(new Rect(36 + (Screen.width / 60), (Screen.height / 2) + (circularTexture.height / 2) + 12, change_emote_btn.width, change_emote_btn.height), change_emote_btn);
+            }
+
+            if (rb)
+            {
+                try
+                {
+                    EllipsisText(new Rect((Screen.width / 60) + 156f, (Screen.height / 2) - 42.5f, 32, 85), Main.settings.semote3.ToUpper());
+                    EllipsisText(new Rect((Screen.width / 60) + 16f, (Screen.height / 2) - 42.5f, 32, 85), Main.settings.semote1.ToUpper());
+                    EllipsisText(new Rect((Screen.width / 60) + 61, (Screen.height / 2) - 87, 85, 32), Main.settings.semote4.ToUpper());
+                    EllipsisText(new Rect((Screen.width / 60) + 61, (Screen.height / 2) + 53, 85, 32), Main.settings.semote2.ToUpper());
+                }
+                catch
+                {
+                    UnityModManager.Logger.Log("Error ui " + (Main.walking_go.emote3 == null));
+                }
+
+                //if (show_change_btn) GUI.DrawTexture(new Rect(36 + (Screen.width / 60), (Screen.height / 2) + (circularTexture.height / 2) + 12, change_emote_btn.width, change_emote_btn.height), change_emote_btn);
             }
 
             if (emote_config)

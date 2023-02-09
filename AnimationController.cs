@@ -23,6 +23,7 @@ namespace walking_mod
         GameObject copy;
         public bool anchorRoot = false;
         public float speed = 1f;
+        public string animationType = "xl";
 
         public AnimController()
         {
@@ -122,6 +123,12 @@ namespace walking_mod
             }
             catch { }
 
+            try
+            {
+                animationType = json_parsed["type"] == null ? animationType : (string)json_parsed["type"];
+            }
+            catch { }
+
             animation = new AnimationJSON((float)json_parsed["duration"], Newtonsoft.Json.JsonConvert.DeserializeObject<float[]>(json_parsed["times"].ToString()), parts);
             UnityModManager.Logger.Log("Loaded " + animation.ToString() + " " + name);
 
@@ -182,6 +189,14 @@ namespace walking_mod
                             AnimationJSONPart apart = (AnimationJSONPart)property.GetValue(animation.parts, null);
                             Vector3 anim_position = new Vector3(apart.position[index][0], apart.position[index][1], apart.position[index][2]);
 
+                            /*if (part[part.Length - 1] == 'l' || part[part.Length - 1] == 'r')
+                            {
+                                string counterpart = part.Remove(part.Length - 1) + (part[part.Length - 1] == 'l' ? 'r' : 'l');
+                                var ctproperty = type.GetProperty(counterpart);
+                                AnimationJSONPart ctapart = (AnimationJSONPart)ctproperty.GetValue(animation.parts, null);
+                                anim_position = new Vector3(ctapart.position[index][0], ctapart.position[index][1], ctapart.position[index][2]);
+                            }*/
+
                             copy.transform.position = translateLocal(fs.self.transform, offset);
                             copy.transform.rotation = rotateLocal(fs.self.transform, rotation_offset).rotation;
 
@@ -191,13 +206,16 @@ namespace walking_mod
                             tpart.position = Vector3.Lerp(tpart.position, target_pos, step);
                             Transform result = rotateLocal(copy.transform, new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]));
 
-                            /*result.Rotate(90, 0, 0, Space.Self); // mixamo
-                            result.Rotate(0, -90, 0, Space.Self);*/ // mixamo
+                            if(animationType == "mixamo")
+                            {
+                                result.Rotate(90, 0, 0, Space.Self); // mixamo
+                                //result.Rotate(0, -90, 0, Space.Self); // mixamo
+                            }
 
                             tpart.rotation = Quaternion.Slerp(tpart.rotation, result.rotation, step);
                         }
-                        catch {
-                            UnityModManager.Logger.Log("Error playing frame");
+                        catch (Exception e) {
+                            UnityModManager.Logger.Log("Error playing frame " + e.Message);
                         }
                     }
                 }

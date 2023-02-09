@@ -57,6 +57,10 @@ namespace walking_mod
                     GUILayout.Label("Volume");
                     settings.volume = GUILayout.HorizontalScrollbar(settings.volume, .1f, 0f, 1f);
                 GUILayout.EndVertical();
+                GUILayout.BeginVertical();
+                    GUILayout.Label("Sound emotes volume");
+                    settings.emote_volume = GUILayout.HorizontalScrollbar(settings.emote_volume, .1f, 0f, 1f);
+                GUILayout.EndVertical();
             GUILayout.EndVertical();
 
             GUILayout.BeginVertical(GUILayout.Width(420));
