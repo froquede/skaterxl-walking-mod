@@ -164,7 +164,7 @@ namespace walking_mod
                 frame = index;
 
                 int d_crossfade = Main.walking_go.last_animation != name ? 12 : crossfade;
-                float smooth_factor = Main.walking_go.last_animation != name ? .075f : .2f;
+                float smooth_factor = Main.walking_go.last_animation != name ? .01f : .99f;
                 float step = count < d_crossfade ? Time.smoothDeltaTime * (48 / d_crossfade) : Time.smoothDeltaTime * 48f;
 
                 Type type_pelvis = typeof(AnimationJSONParts);
@@ -197,16 +197,17 @@ namespace walking_mod
                                 anim_position = new Vector3(ctapart.position[index][0], ctapart.position[index][1], ctapart.position[index][2]);
                             }*/
 
-                            copy.transform.position = translateLocal(fs.self.transform, offset);
-                            copy.transform.rotation = rotateLocal(fs.self.transform, rotation_offset).rotation;
+                            copy.transform.position = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
+                            copy.transform.rotation = rotation_offset * fs.self.transform.rotation;
 
-                            Vector3 target_pos = translateLocal(copy.transform, anim_position);
+                            Vector3 target_pos = TranslateWithRotation(copy.transform.position, anim_position, copy.transform.rotation);
                             step = step * (1f - smooth_factor * Vector3.Distance(tpart.position, target_pos));
 
                             tpart.position = Vector3.Lerp(tpart.position, target_pos, step);
-                            Transform result = rotateLocal(copy.transform, new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]));
+                            Transform result = copy.transform;
+                            result.rotation = copy.transform.rotation * new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]);
 
-                            if(animationType == "mixamo")
+                            if (animationType == "mixamo")
                             {
                                 result.Rotate(90, 0, 0, Space.Self); // mixamo
                                 //result.Rotate(0, -90, 0, Space.Self); // mixamo
@@ -244,39 +245,11 @@ namespace walking_mod
             return (value - min) * 1f / (max - min);
         }
 
-        GameObject translate_local_go;
-        public Vector3 translateLocal(Transform origin, Vector3 offset)
+        public Vector3 TranslateWithRotation(Vector3 input, Vector3 translation, Quaternion rotation)
         {
-            if (translate_local_go == null)
-            {
-                translate_local_go = new GameObject();
-                UnityEngine.Object.DontDestroyOnLoad(translate_local_go);
-            }
-
-            translate_local_go.transform.position = origin.position;
-            translate_local_go.transform.rotation = origin.rotation;
-
-            translate_local_go.transform.Translate(offset, Space.Self);
-
-            Vector3 result = translate_local_go.transform.position;
-            return result;
-        }
-
-        GameObject rotate_local_go;
-        Transform rotateLocal(Transform origin, Quaternion offset)
-        {
-            if (rotate_local_go == null)
-            {
-                rotate_local_go = new GameObject();
-                UnityEngine.Object.DontDestroyOnLoad(rotate_local_go);
-            }
-            rotate_local_go.transform.position = origin.position;
-            rotate_local_go.transform.rotation = origin.rotation;
-
-            rotate_local_go.transform.Rotate(offset.eulerAngles, Space.Self);
-
-            Transform result = rotate_local_go.transform;
-            return result;
+            Vector3 rotatedTranslation = rotation * translation;
+            Vector3 output = input + rotatedTranslation;
+            return output;
         }
 
         public void Play()

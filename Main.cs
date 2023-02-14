@@ -68,7 +68,7 @@ namespace walking_mod
             GUILayout.BeginHorizontal();
             GUILayout.Label("Throwdown force", GUILayout.Width(100));
             settings.throwdown_force = GUILayout.HorizontalScrollbar(settings.throwdown_force, .1f, 0f, 50f);
-            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.throwdown_force = 18f;
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.throwdown_force = 25f;
             GUILayout.EndHorizontal();
 
             GUILayout.Space(6);

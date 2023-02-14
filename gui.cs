@@ -20,6 +20,7 @@ namespace walking_mod
         Font futura;
         GUIStyle style, debugStyle;
         Font font;
+        public IDictionary<string, Transform> sound_targets = new Dictionary<string, Transform>();
 
         public void Start()
         {
@@ -160,7 +161,6 @@ namespace walking_mod
         public int selected = 0;
         private void OnGUI()
         {
-
             if (!visible) return;
 
             GUI.DrawTexture(new Rect(Screen.width / 60, (Screen.height / 2) - circularTexture.height / 2, circularTexture.width, circularTexture.height), circularTexture);
