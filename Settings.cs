@@ -16,6 +16,7 @@ namespace walking_mod
         public string semote1 = "catchulater", semote2 = "cmonletsmove", semote3 = "hey_you_guys", semote4 = "pretty_sick";
         public Vector3 camera_offset = new Vector3(.05f, .12f, -1.3f);
         public float throwdown_force = 25f;
+        public float max_magnitude_bail = 8f;
 
         public void OnChange()
         {

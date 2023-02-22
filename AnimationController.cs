@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using ModIO.UI;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
@@ -21,7 +22,7 @@ namespace walking_mod
         CallBack callback;
         bool loop = true;
         GameObject copy;
-        public bool anchorRoot = false;
+        public bool anchorRoot = false, doCrossfade = true;
         public float speed = 1f;
         public string animationType = "xl";
 
@@ -100,6 +101,7 @@ namespace walking_mod
             }
             else
             {
+                MessageSystem.QueueMessage(MessageDisplayData.Type.Error, "Error loading animation '" + name + "', file doesn't exists", 3f);
                 return;
             }
 
@@ -115,7 +117,9 @@ namespace walking_mod
                     AnimationJSONPart new_part = new AnimationJSONPart(JsonConvert.DeserializeObject<float[][]>(json_parsed["parts"][part]["position"].ToString()), JsonConvert.DeserializeObject<float[][]>(json_parsed["parts"][part]["quaternion"].ToString()));
                     property.SetValue(parts, new_part);
                 }
-                catch { }
+                catch (Exception e) {
+                    MessageSystem.QueueMessage(MessageDisplayData.Type.Error, "Error loading animation '" + name + "', file malformed | " + e.Message, 3f);
+                }
             }
 
             try {
@@ -130,7 +134,7 @@ namespace walking_mod
             catch { }
 
             animation = new AnimationJSON((float)json_parsed["duration"], Newtonsoft.Json.JsonConvert.DeserializeObject<float[]>(json_parsed["times"].ToString()), parts);
-            UnityModManager.Logger.Log("Loaded " + animation.ToString() + " " + name);
+            UnityModManager.Logger.Log("[walking-mod] Loaded animation: " + animation.ToString() + " " + name);
 
             Type type_pelvis = typeof(AnimationJSONParts);
             var prop_pelvis = type_pelvis.GetProperty("Skater_pelvis");
@@ -163,7 +167,7 @@ namespace walking_mod
                 if (count < crossfade) index = 0;
                 frame = index;
 
-                int d_crossfade = Main.walking_go.last_animation != name ? 12 : crossfade;
+                int d_crossfade = Main.walking_go.last_animation != name && doCrossfade ? 12 : crossfade;
                 float smooth_factor = Main.walking_go.last_animation != name ? .01f : .99f;
                 float step = count < d_crossfade ? Time.smoothDeltaTime * (48 / d_crossfade) : Time.smoothDeltaTime * 48f;
 
@@ -269,6 +273,7 @@ namespace walking_mod
 
         public void Stop()
         {
+            UnityModManager.Logger.Log("Stopped " + name);
             isPlaying = false;
             Main.walking_go.last_animation = name;
             if (callback != null)

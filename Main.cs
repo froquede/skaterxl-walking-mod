@@ -40,6 +40,7 @@ namespace walking_mod
         }
         static bool Unload(UnityModManager.ModEntry modEntry)
         {
+            if (walking_go.inState) walking_go.EnableGameplay();
             UnityEngine.Object.Destroy(go);
             return true;
         }
@@ -52,6 +53,10 @@ namespace walking_mod
 
         private static void OnGUI(UnityModManager.ModEntry modEntry)
         {
+
+            if (GUILayout.Button("Reload emotes", GUILayout.Height(32), GUILayout.Width(128))) walking_go.LoadEmotes();
+            GUILayout.Space(6);
+
             GUILayout.BeginVertical(GUILayout.Width(256));
                 GUILayout.BeginVertical();
                     GUILayout.Label("Volume");
@@ -69,6 +74,13 @@ namespace walking_mod
             GUILayout.Label("Throwdown force", GUILayout.Width(100));
             settings.throwdown_force = GUILayout.HorizontalScrollbar(settings.throwdown_force, .1f, 0f, 50f);
             if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.throwdown_force = 25f;
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(6);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Max bail force (" + settings.max_magnitude_bail.ToString("N2") + ")", GUILayout.Width(100));
+            settings.max_magnitude_bail = GUILayout.HorizontalScrollbar(settings.max_magnitude_bail, .1f, 0f, 20f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.max_magnitude_bail = 8f;
             GUILayout.EndHorizontal();
 
             GUILayout.Space(6);

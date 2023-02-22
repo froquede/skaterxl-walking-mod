@@ -67,6 +67,13 @@ namespace walking_mod
                 collider.material.staticFriction = .6f;
 
                 cache = new Dictionary<string, Transform>();
+
+                /*GameObject capsuledebug = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                capsuledebug.GetComponent<CapsuleCollider>().height = 1.4404f;
+                capsuledebug.GetComponent<CapsuleCollider>().radius = .2f;
+                capsuledebug.GetComponent<CapsuleCollider>().enabled = false;
+                capsuledebug.transform.position = self.transform.position;
+                capsuledebug.transform.rotation = self.transform.rotation;*/
             }
         }
 
