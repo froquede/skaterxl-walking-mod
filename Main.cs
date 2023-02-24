@@ -31,6 +31,7 @@ namespace walking_mod
             Main.modEntry = modEntry;
 
             settings = UnityModManager.ModSettings.Load<Settings>(modEntry);
+            settings.temprot = settings.camera_rotation_offset.eulerAngles;
 
             UnityModManager.Logger.Log("Loaded " + modEntry.Info.Id);
             UnityEngine.Object.DontDestroyOnLoad(go);
@@ -84,7 +85,33 @@ namespace walking_mod
             GUILayout.EndHorizontal();
 
             GUILayout.Space(6);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Roll limiter (" + settings.minVelocityRoll.ToString("N2") + ") seconds", GUILayout.Width(100));
+            settings.minVelocityRoll = GUILayout.HorizontalScrollbar(settings.minVelocityRoll, .05f, 0f, 1f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.minVelocityRoll = .5f;
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(6);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Respawn on skate after bail limit (" + settings.bailLimit.ToString("N2") + ") seconds", GUILayout.Width(100));
+            settings.bailLimit = GUILayout.HorizontalScrollbar(settings.bailLimit, .05f, 0f, 20f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.bailLimit = 1f;
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(6);
             GUILayout.BeginVertical();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Camera position velocity", GUILayout.Width(100));
+            settings.camera_pos_vel = GUILayout.HorizontalScrollbar(settings.camera_pos_vel, .1f, 0f, 20f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.camera_pos_vel = 10f;
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Camera rotation velocity", GUILayout.Width(100));
+            settings.camera_rot_vel = GUILayout.HorizontalScrollbar(settings.camera_rot_vel, .1f, 0f, 20f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.camera_rot_vel = 4f;
+            GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Camera offset x", GUILayout.Width(100));
@@ -103,6 +130,26 @@ namespace walking_mod
             settings.camera_offset.z = GUILayout.HorizontalScrollbar(settings.camera_offset.z, .1f, -4f, 4f);
             if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.camera_offset.z = -1.3f;
             GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Camera rotation offset x", GUILayout.Width(100));
+            settings.temprot.x = GUILayout.HorizontalScrollbar(settings.temprot.x, 1f, -90f, 90f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.temprot.x = 0;
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Camera rotation offset y", GUILayout.Width(100));
+            settings.temprot.y = GUILayout.HorizontalScrollbar(settings.temprot.y, 1f, -180f, 180f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.temprot.y = 0;
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Camera rotation offset z", GUILayout.Width(100));
+            settings.temprot.z = GUILayout.HorizontalScrollbar(settings.temprot.z, 1f, -180f, 180f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.temprot.z = 0;
+            GUILayout.EndHorizontal();
+
+            settings.camera_rotation_offset = Quaternion.Euler(settings.temprot);
 
             GUILayout.EndVertical();
 
@@ -125,7 +172,7 @@ namespace walking_mod
 
         private static void OnSaveGUI(UnityModManager.ModEntry modEntry)
         {
-
+            settings.Save(modEntry);
         }
     }
 }
