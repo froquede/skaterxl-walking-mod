@@ -41,7 +41,7 @@ namespace walking_mod
         }
         static bool Unload(UnityModManager.ModEntry modEntry)
         {
-            if (walking_go.inState) walking_go.EnableGameplay();
+            if (walking_go.inState) walking_go.RestoreGameplay(true, true);
             UnityEngine.Object.Destroy(go);
             return true;
         }
@@ -86,7 +86,7 @@ namespace walking_mod
 
             GUILayout.Space(6);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Roll limiter (" + settings.minVelocityRoll.ToString("N2") + ") seconds", GUILayout.Width(100));
+            GUILayout.Label("Roll limiter (" + settings.minVelocityRoll.ToString("N2") + ")", GUILayout.Width(100));
             settings.minVelocityRoll = GUILayout.HorizontalScrollbar(settings.minVelocityRoll, .05f, 0f, 1f);
             if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.minVelocityRoll = .5f;
             GUILayout.EndHorizontal();

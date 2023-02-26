@@ -227,7 +227,6 @@ namespace walking_mod
             {
                 if (GameStateMachine.Instance.CurrentState.GetType() == typeof(GearSelectionState))
                 {
-                    //RestoreGameplay(true, false);
                 }
                 else RestoreGameplay(false, false);
 
@@ -484,7 +483,7 @@ namespace walking_mod
             last_velocity = fs.rb.velocity;
         }
 
-        void RestoreGameplay(bool originalRespawn = false, bool playObj = true)
+        public void RestoreGameplay(bool originalRespawn = false, bool playObj = true)
         {
             try
             {
@@ -584,7 +583,7 @@ namespace walking_mod
 
         void SetRespawn()
         {
-            PlayerController.Instance.respawn.DPadDown();
+            DPadDown();
             /*RespawnInfo respawnInfo = new RespawnInfo
             {
                 position = fs.self.transform.position - new Vector3(0, .715f, 0),
@@ -593,6 +592,23 @@ namespace walking_mod
                 isSwitch = false
             };
             PlayerController.Instance.respawn.SetSpawnPoint(respawnInfo);*/
+        }
+
+        float last_dpad_down = 0f;
+        void DPadDown()
+        {
+            if (Time.unscaledTime - last_dpad_down >= .4f)
+            {
+                last_dpad_down = Time.unscaledTime;
+                PlayerController.Instance.respawn.SetSpawnPos(fs.self.transform.position - new Vector3(0, .73f, 0), PlayerController.Instance.skaterController.skaterTransform.rotation * last_rotation_offset, false);
+                UISounds.Instance.PlayOneShotSelectMajor();
+                Animator componentInChildren = PlayerController.Instance.respawn.pin.GetComponentInChildren<Animator>();
+                PlayerController.Instance.respawn.pin.gameObject.SetActive(true);
+                if (componentInChildren != null)
+                {
+                    componentInChildren.SetTrigger("Placed");
+                }
+            }
         }
 
         void AddReplayFrame()
@@ -1111,7 +1127,8 @@ namespace walking_mod
             if ((PlayerController.Instance.inputController.player.GetButton("A") && PlayerController.Instance.inputController.player.GetButton("X")) || (PlayerController.Instance.currentStateEnum == PlayerController.CurrentState.Bailed && bail_magnitude <= Main.settings.max_magnitude_bail))
             {
                 press_count++;
-                if (press_count >= 12 || (PlayerController.Instance.currentStateEnum == PlayerController.CurrentState.Bailed && dot >= 0f))
+                bool bailmode = (PlayerController.Instance.currentStateEnum == PlayerController.CurrentState.Bailed && dot >= 0f);
+                if (press_count >= 12 || bailmode)
                 {
                     DisableGameplay();
                     DestroyFS();
@@ -1125,14 +1142,23 @@ namespace walking_mod
                     velocityOnEnter = PlayerController.Instance.skaterController.skaterRigidbody.velocity;
                     RaycastHit hit_ground;
                     Vector3 raycastOrigin = PlayerController.Instance.skaterController.skaterTransform.position + new Vector3(0, 2f, 0);
-                    Vector3 old_pos = PlayerController.Instance.skaterController.animBoardTargetTransform.position;
-                    if (Physics.Raycast(raycastOrigin, Vector3.down, out hit_ground))
+                    Vector3 old_pos = PlayerController.Instance.skaterController.skaterTransform.position;
+                    if (!bailmode)
                     {
-                        old_pos = hit_ground.point + new Vector3(0, fs.collider.height / 2f, 0);
+                        if (Physics.Raycast(raycastOrigin, Vector3.down, out hit_ground))
+                        {
+                            old_pos = hit_ground.point + new Vector3(0, fs.collider.height / 2f, 0);
+                        }
+                        else
+                        {
+                            old_pos = PlayerController.Instance.skaterController.skaterTransform.position + new Vector3(0, fs.collider.height / 2f, 0);
+                        }
                     }
                     else
                     {
-                        old_pos = PlayerController.Instance.skaterController.skaterTransform.position + new Vector3(0, fs.collider.height / 2f, 0);
+                        PlayerController.Instance.SetBoardPhysicsMaterial(PlayerController.FrictionType.Default);
+                        fakeSkate.GetComponent<Rigidbody>().velocity = PlayerController.Instance.boardController.boardRigidbody.velocity;
+                        fakeSkate.GetComponent<Rigidbody>().angularVelocity = PlayerController.Instance.boardController.boardRigidbody.angularVelocity;
                     }
 
                     Quaternion look = Quaternion.LookRotation(PlayerController.Instance.boardController.boardRigidbody.velocity);
@@ -1192,17 +1218,16 @@ namespace walking_mod
 
                     if (MultiplayerManager.Instance.InRoom)
                     {
+                        PlayerController.Instance.respawn.recentlyRespawned = false;
                         PlayerController.Instance.ForceBail();
-                        PlayerController.Instance.CancelInvoke("DoBail");
                     }
                 }
             }
             else
             {
                 press_count = 0;
+                if (PlayerController.Instance.currentStateEnum == PlayerController.CurrentState.Bailed) PlayerController.Instance.SetBoardPhysicsMaterial(PlayerController.FrictionType.Bail);
             }
-
-            //Throwdown();
         }
 
         void RespawnRoutineCoroutines()
@@ -1507,8 +1532,8 @@ namespace walking_mod
                     PlayerController.Instance.comController.COMRigidbody.MovePosition(PlayerController.Instance.skaterController.skaterRigidbody.position);
                     PlayerController.Instance.comController.COMRigidbody.velocity = PlayerController.Instance.boardController.boardRigidbody.velocity;
                     delay_input = true;
-                    RespawnRoutineCoroutines();
                     PlayerController.Instance.boardController.ResetBoardTargetPosition();
+                    EventManager.Instance.EnterAir(respawnSwitch ? PopType.Switch : PopType.Ollie);
                 }
             }
 
@@ -1561,18 +1586,9 @@ namespace walking_mod
             EnableGameplay();
             PlayerController.Instance.inputController.enabled = false;
             RespawnRoutine(respawnInfo);
-            PlayerController.Instance.boardController.boardRigidbody.isKinematic = false;
-            PlayerController.Instance.boardController.boardRigidbody.useGravity = true;
-
+            RespawnRoutineCoroutines();
             PlayerController.Instance.respawn.behaviourPuppet.BoostImmunity(1000f);
             PlayerController.Instance.respawn.behaviourPuppet.BoostImpulseMlp(1000f);
-            PlayerController.Instance.ResetBoardCenterOfMass();
-            PlayerController.Instance.ResetBackTruckCenterOfMass();
-            PlayerController.Instance.ResetFrontTruckCenterOfMass();
-            PlayerController.Instance.ResetAllAnimations();
-            PlayerController.Instance.boardController.boardRigidbody.angularVelocity = Vector3.zero;
-
-            EventManager.Instance.EnterAir(respawnSwitch ? PopType.Switch : PopType.Ollie);
         }
 
         void OnImpactEnd()
@@ -1591,18 +1607,9 @@ namespace walking_mod
             PlayerController.Instance.skaterController.skaterTransform.rotation = fs.self.transform.rotation;
             PlayerController.Instance.boardController.boardTransform.position = fakeSkate.transform.position;
             PlayerController.Instance.boardController.boardTransform.rotation = fakeSkate.transform.rotation;
-            PinMovementController.SetStartTransform(new Vector3(PlayerController.Instance.skaterController.skaterTransform.position.x, PlayerController.Instance.skaterController.skaterTransform.position.y + fs.collider.height, PlayerController.Instance.skaterController.skaterTransform.position.z), PlayerController.Instance.skaterController.skaterTransform.rotation);
-            /*PlayerController.Instance.comController.transform.position = fs.self.transform.position;
-            PlayerController.Instance.comController.transform.rotation = fs.self.transform.rotation;*/
-            /*PlayerController.Instance.comController.COMRigidbody.position = fs.self.transform.position;
-            PlayerController.Instance.comController.COMRigidbody.transform.position = fs.self.transform.position;
-            PlayerController.Instance.skaterController.leanProxy.position = fs.self.transform.position;
-            PlayerController.Instance.skaterController.leanProxy.transform.position = fs.self.transform.position;
-            PlayerController.Instance.skaterController.leanProxy.rotation = fs.rb.transform.forward != Vector3.zero ? Quaternion.LookRotation(fs.rb.transform.forward) : Quaternion.identity;
-            PlayerController.Instance.skaterController.leanProxy.transform.rotation = fs.rb.transform.forward != Vector3.zero ? Quaternion.LookRotation(fs.rb.transform.forward) : Quaternion.identity;*/
-
             PlayerController.Instance.skaterController.skaterTargetTransform.position = fakeSkate.transform.position;
             PlayerController.Instance.skaterController.skaterTargetTransform.rotation = PlayerController.Instance.skaterController.skaterTransform.rotation;
+            PinMovementController.SetStartTransform(new Vector3(PlayerController.Instance.skaterController.skaterTransform.position.x, PlayerController.Instance.skaterController.skaterTransform.position.y + fs.collider.height, PlayerController.Instance.skaterController.skaterTransform.position.z), PlayerController.Instance.skaterController.skaterTransform.rotation);
         }
 
         Transform[] original_bones;
@@ -1902,16 +1909,16 @@ namespace walking_mod
                 PlayerController.Instance.respawn.getSpawn[j].position = position;
                 PlayerController.Instance.respawn.getSpawn[j].rotation = rotation;
             }
-            PlayerController.Instance.skaterController.skaterTransform.position = PlayerController.Instance.boardController.boardRigidbody.position;
-            //PlayerController.Instance.skaterController.skaterTargetTransform.position = PlayerController.Instance.boardController.boardRigidbody.position;
+            PlayerController.Instance.skaterController.skaterTransform.position = TranslateWithRotation(PlayerController.Instance.boardController.boardTransform.position, new Vector3(0, .73f, 0), PlayerController.Instance.boardController.boardTransform.rotation);
             PlayerController.Instance.ResetIKOffsets();
-            //PlayerController.Instance.cameraController._leanForward = false;
-            //PlayerController.Instance.cameraController._pivot.rotation = PlayerController.Instance.cameraController._pivotCentered.rotation;
+            PlayerController.Instance.cameraController.ResetAllCamera();
+            PlayerController.Instance.cameraController._leanForward = false;
+            PlayerController.Instance.cameraController._pivot.rotation = PlayerController.Instance.cameraController._pivotCentered.rotation;
             PlayerController.Instance.skaterController.skaterRigidbody.useGravity = false;
-            PlayerController.Instance.boardController.boardRigidbody.velocity = Vector3.zero;
-            PlayerController.Instance.boardController.boardRigidbody.angularVelocity = Vector3.zero;
             PlayerController.Instance.skaterController.skaterRigidbody.velocity = Vector3.zero;
             PlayerController.Instance.skaterController.skaterRigidbody.angularVelocity = Vector3.zero;
+            PlayerController.Instance.boardController.boardRigidbody.velocity = Vector3.zero;
+            PlayerController.Instance.boardController.boardRigidbody.angularVelocity = Vector3.zero;
             PlayerController.Instance.boardController.IsBoardBackwards = respawnInfos.IsBoardBackwards;
             PlayerController.Instance.SetBoardToMaster();
             PlayerController.Instance.SetTurningMode(InputController.TurningMode.Grounded);
@@ -1924,10 +1931,8 @@ namespace walking_mod
             PlayerController.Instance.SetMaxSteeze(0f);
             PlayerController.Instance.AnimSetPush(false);
             PlayerController.Instance.AnimSetMongo(false);
-            PlayerController.Instance.cameraController.ResetAllCamera();
             SoundManager.Instance.StopGrindSound(0f);
             PlayerController.Instance.SetIKOnOff(1f);
-            PlayerController.Instance.skaterController.skaterRigidbody.useGravity = false;
             PlayerController.Instance.skaterController.skaterRigidbody.constraints = RigidbodyConstraints.None;
             PlayerController.Instance.respawn.bail.bailed = false;
             PlayerController.Instance.playerSM.OnRespawnSM();
@@ -1935,12 +1940,31 @@ namespace walking_mod
             if (!respawnSwitch) PlayerController.Instance.skaterController.ResetSwitchAnims();
             PlayerController.Instance.animationController.SetValue("Switch", respawnSwitch);
             PlayerController.Instance.animationController.SetValue("AnimSwitch", respawnSwitch);
-            PlayerController.Instance.animationController.CrossFadeAnimation("Riding", .5f);
-            //PlayerController.Instance.animationController.ForceUpdateAnimators();
             PlayerController.Instance.ikController.ForceUpdateIK();
             Time.timeScale = 1f;
             PlayerController.Instance.cameraController.enabled = true;
             PlayerController.Instance.EnablePuppetMaster(true, false);
+            PlayerController.Instance.animationController.ScaleAnimSpeed(1f);
+            MonoBehaviourSingleton<PlayerController>.Instance.SetIKLerpSpeed(1f);
+            MonoBehaviourSingleton<PlayerController>.Instance.SetLeftIKLerpTarget(0f);
+            MonoBehaviourSingleton<PlayerController>.Instance.SetRightIKLerpTarget(0f);
+            MonoBehaviourSingleton<PlayerController>.Instance.SetRightIKWeight(1f);
+            MonoBehaviourSingleton<PlayerController>.Instance.SetLeftIKWeight(1f);
+            MonoBehaviourSingleton<PlayerController>.Instance.cameraController.IsInGrindState = false;
+            MonoBehaviourSingleton<PlayerController>.Instance.cameraController.IsInCopingState = false;
+            MonoBehaviourSingleton<PlayerController>.Instance.cameraController.NeedToSlowLerpCamera = false;
+            MonoBehaviourSingleton<PlayerController>.Instance.SetBoardPhysicsMaterial(PlayerController.FrictionType.Default);
+            MonoBehaviourSingleton<PlayerController>.Instance.comController.UpdateCOM(0.89f, 0);
+            MonoBehaviourSingleton<PlayerController>.Instance.skaterController.InitializeSkateRotation();
+            MonoBehaviourSingleton<PlayerController>.Instance.skaterController.skaterRigidbody.angularVelocity = Vector3.zero;
+            MonoBehaviourSingleton<PlayerController>.Instance.boardController.triggerManager.spline = null;
+            MonoBehaviourSingleton<PlayerController>.Instance.ResetBoardCenterOfMass();
+            MonoBehaviourSingleton<PlayerController>.Instance.ResetBackTruckCenterOfMass();
+            MonoBehaviourSingleton<PlayerController>.Instance.ResetFrontTruckCenterOfMass();
+            MonoBehaviourSingleton<SoundManager>.Instance.StopPowerslideSound(1, Vector3.ProjectOnPlane(MonoBehaviourSingleton<PlayerController>.Instance.boardController.boardRigidbody.velocity, Vector3.up).magnitude);
+            EventManager.Instance.ExitGrind();
+            PlayerController.Instance.animationController.CrossFadeAnimation("Riding", .5f);
+            PlayerController.Instance.animationController.ForceUpdateAnimators();
         }
     }
 }
