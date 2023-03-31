@@ -23,6 +23,8 @@ namespace walking_mod
         public float smooth_factor_transition = .25f;
         public float camera_pos_vel = 10f, camera_rot_vel = 4f;
         public float bailLimit = 2f;
+
+        public float idle_jump_force = 1f, running_jump_force = 2.5f, flip_jump_force = 3f;
         public void OnChange()
         {
             throw new NotImplementedException();

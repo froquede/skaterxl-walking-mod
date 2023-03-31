@@ -1,5 +1,5 @@
 ﻿namespace walking_mod
-{
+{   
     class AnimationJSON
     {
         public float duration;
@@ -89,8 +89,6 @@
         public AnimationJSONPart Skater_Toe2_r { get; set; }
         public AnimationJSONPart Skater_Leg_twist_01_r { get; set; }
         public AnimationJSONPart Skater_UpLeg_twist_01_r { get; set; }
-
-
     }
 
     class AnimationJSONPart

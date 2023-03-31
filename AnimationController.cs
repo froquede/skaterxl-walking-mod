@@ -25,7 +25,36 @@ namespace walking_mod
         bool loop = true;
         public bool anchorRoot = false, doCrossfade = true;
         public float speed = 1f;
-        public string animationType = "xl";
+        public float timeLimit = 0f;
+
+        float animTime = 0f;
+        public int frame = 0, last_frame = 0, count = 0, crossfade = 0;
+        Vector3 first_frame_pelvis;
+        public bool anchorRootFade = true;
+        public float anchorRootSpeed = 12f;
+
+        public AnimController(AnimController origin)
+        {
+            animation = origin.animation;
+            fs = origin.fs;
+            path = origin.path;
+            offset = origin.offset;
+            rotation_offset = origin.rotation_offset;
+            callback = origin.callback;
+            loop = origin.loop;
+            anchorRoot = origin.anchorRoot;
+            doCrossfade = origin.doCrossfade;
+            speed = origin.speed;
+            timeLimit = origin.timeLimit;
+            animTime = origin.animTime;
+            frame = origin.frame;
+            last_frame = origin.last_frame;
+            count = origin.count;
+            crossfade = origin.crossfade;
+            first_frame_pelvis = origin.first_frame_pelvis;
+            anchorRootFade = origin.anchorRootFade;
+            anchorRootSpeed = origin.anchorRootSpeed;
+        }
 
         public AnimController()
         {
@@ -94,12 +123,13 @@ namespace walking_mod
             }
         }
 
-        void LoadJSON()
+        async void LoadJSON()
         {
             string json;
             if (File.Exists(path))
             {
-                json = File.ReadAllText(path);
+                var reader = File.OpenText(path);
+                json = await reader.ReadToEndAsync();
             }
             else
             {
@@ -131,12 +161,6 @@ namespace walking_mod
             }
             catch { }
 
-            try
-            {
-                animationType = json_parsed["type"] == null ? animationType : (string)json_parsed["type"];
-            }
-            catch { }
-
             animation = new AnimationJSON((float)json_parsed["duration"], Newtonsoft.Json.JsonConvert.DeserializeObject<float[]>(json_parsed["times"].ToString()), parts);
             UnityModManager.Logger.Log("[walking-mod] Loaded animation: " + animation.ToString() + " " + name);
 
@@ -144,16 +168,11 @@ namespace walking_mod
             var prop_pelvis = type_pelvis.GetProperty("Skater_pelvis");
             AnimationJSONPart pelvis = (AnimationJSONPart)prop_pelvis.GetValue(animation.parts, null);
             first_frame_pelvis = new Vector3(pelvis.position[0][0], pelvis.position[0][1], pelvis.position[0][2]);
+
+            if (timeLimit == 0f) timeLimit = animation.duration;
         }
 
-        float animTime = 0f;
-        public int frame = 0, count = 0, crossfade = 12;
-        Vector3 first_frame_pelvis;
-        public bool anchorRootFade = true;
-        public float anchorRootSpeed = 12f;
-        IDictionary<string, float> Distances = new Dictionary<string, float>();
-
-        public void FixedUpdate()
+        public void Update()
         {
             if (fs.self && isPlaying)
             {
@@ -165,24 +184,35 @@ namespace walking_mod
                     if (animation.times[i] >= animTime) break;
                 }
 
-                if (count < crossfade) index = 0;
+                if (Main.walking_go.last_animation == null) Main.walking_go.last_animation = new AnimController(this);
+
+                int d_crossfade = Main.walking_go.last_animation.name != name && doCrossfade ? 10 : doCrossfade ? crossfade : 0;
+                float step = 0;
+
+                if (count < d_crossfade) index = 0;
+                last_frame = index;
                 frame = index;
 
-                if (Main.walking_go.last_animation == "") Main.walking_go.last_animation = name;
-
-                int d_crossfade = Main.walking_go.last_animation != name && doCrossfade ? 12 : crossfade;
-                float smooth_factor = Main.walking_go.last_animation != name ? .033f : .4f;
-                float step = count < d_crossfade ? Time.smoothDeltaTime * (36 / d_crossfade) : Time.smoothDeltaTime * 24f;
+                int interpolation_index = index - 1;
+                if (interpolation_index < 0) interpolation_index = animation.times.Length - 1;
+                AnimationJSON i_animation = animation;
+                if (count < d_crossfade)
+                {
+                    interpolation_index = Main.walking_go.last_animation.last_frame;
+                    i_animation = Main.walking_go.last_animation.animation;
+                }
 
                 Type type_pelvis = typeof(AnimationJSONParts);
                 var prop_pelvis = type_pelvis.GetProperty("Skater_pelvis");
                 AnimationJSONPart pelvis = (AnimationJSONPart)prop_pelvis.GetValue(animation.parts, null);
                 if (anchorRoot)
                 {
-                    if (anchorRootFade) offset = Vector3.Lerp(offset, new Vector3(-(pelvis.position[frame][0] - first_frame_pelvis.x), -.73f - (pelvis.position[frame][1] - first_frame_pelvis.y), -(pelvis.position[frame][2] - first_frame_pelvis.z)), Time.smoothDeltaTime * 12f);
-                    else offset = new Vector3(-(pelvis.position[frame][0] - first_frame_pelvis.x), -(fs.collider.height / 2f) - (pelvis.position[frame][1] - first_frame_pelvis.y), -(pelvis.position[frame][2] - first_frame_pelvis.z));
+                    float x = -(pelvis.position[index][0] - pelvis.position[0][0]);
+                    float y = -(pelvis.position[index][1] - pelvis.position[0][1]);
+                    float z = -(pelvis.position[index][2] - pelvis.position[0][2]);
+                    if (anchorRootFade) offset = Vector3.Lerp(offset, new Vector3(x, -(fs.collider.height / 2) + y, z), Time.fixedDeltaTime * 12f);
+                    else offset = new Vector3(x, -(fs.collider.height / 2) + y, z);
                 }
-
 
                 foreach (string part in fs.bones)
                 {
@@ -194,32 +224,56 @@ namespace walking_mod
                             Type type = typeof(AnimationJSONParts);
                             var property = type.GetProperty(part);
                             AnimationJSONPart apart = (AnimationJSONPart)property.GetValue(animation.parts, null);
+                            AnimationJSONPart iapart = (AnimationJSONPart)property.GetValue(i_animation.parts, null);
+
+                            float i_time = i_animation.times[interpolation_index];
+                            if (i_time > animation.times[index]) i_time = 0;
+
+                            float istep = animation.times[index] - i_time;
+                            float diff = animTime - i_time;
+                            step = 1 - ((istep - diff) / istep);
+
+                            if (count < d_crossfade && Main.walking_go.last_animation.name != name)
+                            {
+                                step = (((float)count + 1) / (float)d_crossfade);
+                            }
+
                             Vector3 anim_position = new Vector3(apart.position[index][0], apart.position[index][1], apart.position[index][2]);
+                            Vector3 i_anim_position = new Vector3(iapart.position[interpolation_index][0], iapart.position[interpolation_index][1], iapart.position[interpolation_index][2]);
 
                             Vector3 position = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
+                            Vector3 iposition = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
                             Quaternion rotation = rotation_offset * fs.self.transform.rotation;
 
                             Vector3 target_pos = TranslateWithRotation(position, anim_position, rotation);
-                            step = step * (1f - smooth_factor * Vector3.Distance(tpart.position, target_pos));
+                            Vector3 i_target_pos = TranslateWithRotation(iposition, i_anim_position, rotation);
 
-                            tpart.position = Vector3.Lerp(tpart.position, target_pos, step);
+                            tpart.position = Vector3.Lerp(i_target_pos, target_pos, step);
+
+                            Quaternion i_rotation = rotation * new Quaternion(iapart.quaternion[interpolation_index][0], iapart.quaternion[interpolation_index][1], iapart.quaternion[interpolation_index][2], iapart.quaternion[interpolation_index][3]);
 
                             rotation = rotation * new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]);
 
-                            tpart.rotation = Quaternion.Slerp(tpart.rotation, rotation, step * 2f);
+                            tpart.rotation = Quaternion.Lerp(i_rotation, rotation, step);
                         }
                         catch (Exception e)
                         {
-                            UnityModManager.Logger.Log("Error playing frame " + e.Message);
+                            UnityModManager.Logger.Log("Error playing frame " + e.Message + " " + index + " ");
                         }
                     }
                 }
-                if (count >= d_crossfade || Main.walking_go.last_animation == name) animTime += Time.smoothDeltaTime * speed;
+
+                if (count >= d_crossfade) animTime += Time.smoothDeltaTime * speed;
+
                 count++;
 
-                if (animTime > animation.duration)
+                if (animTime > timeLimit)
                 {
-                    if (loop) animTime = 0;
+                    if (loop)
+                    {
+                        count = 0;
+                        animTime = 0;
+                    }
                     else
                     {
                         isPlaying = false;
@@ -231,7 +285,7 @@ namespace walking_mod
                         callback = null;
                     }
 
-                    Main.walking_go.last_animation = name;
+                    if (Main.walking_go.last_animation.name != name) Main.walking_go.last_animation = new AnimController(this);
                 }
             }
         }
@@ -258,25 +312,27 @@ namespace walking_mod
 
         public void Play()
         {
-            animTime = 0f;
+            animTime = 0;
+            if (Main.walking_go.last_animation.name != name) animTime = animation.times[0];
             count = 0;
             isPlaying = true;
         }
 
         public void Play(CallBack call)
         {
-            animTime = 0f;
+            animTime = 0;
+            if (Main.walking_go.last_animation.name != name) animTime = animation.times[0];
             count = 0;
             callback = call;
             isPlaying = true;
         }
 
-        public void Stop()
+        public void Stop(bool ignore_callback = false)
         {
             rotation_offset = original_rotation;
             isPlaying = false;
-            Main.walking_go.last_animation = name;
-            if (callback != null)
+            Main.walking_go.last_animation = new AnimController(this);
+            if (callback != null && !ignore_callback)
             {
                 callback();
                 callback = null;

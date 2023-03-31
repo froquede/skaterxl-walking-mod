@@ -1,6 +1,7 @@
 ﻿
 using HarmonyLib;
 using System;
+using System.Reflection;
 using UnityEngine;
 using UnityModManagerNet;
 
@@ -15,6 +16,7 @@ namespace walking_mod
         public static UnityModManager.ModEntry modEntry;
         public static GameObject go;
         public static gui ui;
+        public static Assembly assembly;
 
         static bool Load(UnityModManager.ModEntry modEntry)
         {
@@ -30,6 +32,9 @@ namespace walking_mod
             modEntry.OnUnload = Unload;
             Main.modEntry = modEntry;
 
+            assembly = Assembly.GetExecutingAssembly();
+            harmonyInstance.PatchAll(Assembly.GetExecutingAssembly());
+
             settings = UnityModManager.ModSettings.Load<Settings>(modEntry);
             settings.temprot = settings.camera_rotation_offset.eulerAngles;
 
@@ -43,6 +48,13 @@ namespace walking_mod
         {
             if (walking_go.inState) walking_go.RestoreGameplay(true, true);
             UnityEngine.Object.Destroy(go);
+
+            try
+            {
+                harmonyInstance.UnpatchAll(harmonyInstance.Id);
+            }
+            catch { }
+
             return true;
         }
 
@@ -153,19 +165,24 @@ namespace walking_mod
 
             GUILayout.EndVertical();
 
-            /*if (!settings.experimental_bail)
-            {
-                if (GUILayout.Button("Enable experimental multiplayer on bail", GUILayout.Height(42))) {
-                    settings.experimental_bail = true;
-                }
-            }
-            else
-            {
-                if (GUILayout.Button("Disable experimental multiplayer on bail", GUILayout.Height(42)))
-                {
-                    settings.experimental_bail = false;
-                }
-            }*/
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Idle jump force", GUILayout.Width(100));
+            settings.idle_jump_force = GUILayout.HorizontalScrollbar(settings.idle_jump_force, .1f, 0f, 10.1f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.idle_jump_force = 1f;
+            GUILayout.EndVertical();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Running jump force", GUILayout.Width(100));
+            settings.running_jump_force = GUILayout.HorizontalScrollbar(settings.running_jump_force, .1f, 0f, 10.1f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.running_jump_force = 2.5f;
+            GUILayout.EndVertical();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Flip jump force", GUILayout.Width(100));
+            settings.flip_jump_force = GUILayout.HorizontalScrollbar(settings.flip_jump_force, .1f, 0f, 10.1f);
+            if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) settings.flip_jump_force = 3f;
+            GUILayout.EndVertical();
+
             GUILayout.EndVertical();
             settings.Draw(modEntry);
         }
