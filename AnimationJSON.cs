@@ -1,6 +1,6 @@
 ﻿namespace walking_mod
 {   
-    class AnimationJSON
+    public class AnimationJSON
     {
         public float duration;
         public float[] times;
@@ -19,7 +19,7 @@
         }
     }
 
-    class AnimationJSONParts
+    public class AnimationJSONParts
     {
         public AnimationJSONPart Skater_pelvis { get; set; }
         public AnimationJSONPart LeftLegJacket { get; set; }
@@ -91,7 +91,7 @@
         public AnimationJSONPart Skater_UpLeg_twist_01_r { get; set; }
     }
 
-    class AnimationJSONPart
+    public class AnimationJSONPart
     {
         public float[][] position, quaternion;
 

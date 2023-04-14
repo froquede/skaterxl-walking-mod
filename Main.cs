@@ -46,6 +46,8 @@ namespace walking_mod
         }
         static bool Unload(UnityModManager.ModEntry modEntry)
         {
+            EventManager.Instance.onGPEvent -= walking_go.onRunEvent;
+
             if (walking_go.inState) walking_go.RestoreGameplay(true, true);
             UnityEngine.Object.Destroy(go);
 

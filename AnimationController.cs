@@ -16,7 +16,7 @@ namespace walking_mod
     {
         public bool isPlaying = false;
 
-        AnimationJSON animation;
+        public AnimationJSON animation;
         FakeSkater fs;
         public string path = "";
         public Vector3 offset = new Vector3(0, -.73f, 0);
@@ -25,7 +25,7 @@ namespace walking_mod
         bool loop = true;
         public bool anchorRoot = false, doCrossfade = true;
         public float speed = 1f;
-        public float timeLimit = 0f;
+        public float timeLimit = 0f, timeLimitStart = 0f;
 
         float animTime = 0f;
         public int frame = 0, last_frame = 0, count = 0, crossfade = 0;
@@ -170,6 +170,7 @@ namespace walking_mod
             first_frame_pelvis = new Vector3(pelvis.position[0][0], pelvis.position[0][1], pelvis.position[0][2]);
 
             if (timeLimit == 0f) timeLimit = animation.duration;
+            if (timeLimitStart == 0f) timeLimitStart = animation.times[0];
         }
 
         public void Update()
@@ -248,11 +249,14 @@ namespace walking_mod
                             Vector3 target_pos = TranslateWithRotation(position, anim_position, rotation);
                             Vector3 i_target_pos = TranslateWithRotation(iposition, i_anim_position, rotation);
 
+                            //if (count < d_crossfade && Main.walking_go.last_animation.name != name) i_target_pos = tpart.position;
+
                             tpart.position = Vector3.Lerp(i_target_pos, target_pos, step);
 
                             Quaternion i_rotation = rotation * new Quaternion(iapart.quaternion[interpolation_index][0], iapart.quaternion[interpolation_index][1], iapart.quaternion[interpolation_index][2], iapart.quaternion[interpolation_index][3]);
 
                             rotation = rotation * new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]);
+                            //if (count < d_crossfade && Main.walking_go.last_animation.name != name) i_rotation = tpart.rotation;
 
                             tpart.rotation = Quaternion.Lerp(i_rotation, rotation, step);
                         }
@@ -272,7 +276,7 @@ namespace walking_mod
                     if (loop)
                     {
                         count = 0;
-                        animTime = 0;
+                        animTime = timeLimitStart;
                     }
                     else
                     {
@@ -312,16 +316,14 @@ namespace walking_mod
 
         public void Play()
         {
-            animTime = 0;
-            if (Main.walking_go.last_animation.name != name) animTime = animation.times[0];
+            animTime = timeLimitStart;
             count = 0;
             isPlaying = true;
         }
 
         public void Play(CallBack call)
         {
-            animTime = 0;
-            if (Main.walking_go.last_animation.name != name) animTime = animation.times[0];
+            animTime = timeLimitStart;
             count = 0;
             callback = call;
             isPlaying = true;
