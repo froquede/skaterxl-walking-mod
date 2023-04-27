@@ -195,6 +195,12 @@ namespace walking_mod
                 frame = index;
 
                 int interpolation_index = index - 1;
+
+                if (animation.times.Length == 1)
+                {
+                    frame = index = interpolation_index = 0;
+                }
+
                 if (interpolation_index < 0) interpolation_index = animation.times.Length - 1;
                 AnimationJSON i_animation = animation;
                 if (count < d_crossfade)
@@ -227,7 +233,7 @@ namespace walking_mod
                             AnimationJSONPart apart = (AnimationJSONPart)property.GetValue(animation.parts, null);
                             AnimationJSONPart iapart = (AnimationJSONPart)property.GetValue(i_animation.parts, null);
 
-                            float i_time = i_animation.times[interpolation_index];
+                            float i_time = i_animation.times.Length - 1 >= interpolation_index ? i_animation.times[interpolation_index] : 0;
                             if (i_time > animation.times[index]) i_time = 0;
 
                             float istep = animation.times[index] - i_time;
@@ -242,27 +248,30 @@ namespace walking_mod
                             Vector3 anim_position = new Vector3(apart.position[index][0], apart.position[index][1], apart.position[index][2]);
                             Vector3 i_anim_position = new Vector3(iapart.position[interpolation_index][0], iapart.position[interpolation_index][1], iapart.position[interpolation_index][2]);
 
-                            Vector3 position = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
-                            Vector3 iposition = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
                             Quaternion rotation = rotation_offset * fs.self.transform.rotation;
+                            Vector3 position = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
 
                             Vector3 target_pos = TranslateWithRotation(position, anim_position, rotation);
-                            Vector3 i_target_pos = TranslateWithRotation(iposition, i_anim_position, rotation);
-
-                            //if (count < d_crossfade && Main.walking_go.last_animation.name != name) i_target_pos = tpart.position;
-
-                            tpart.position = Vector3.Lerp(i_target_pos, target_pos, step);
+                            Vector3 i_target_pos = TranslateWithRotation(position, i_anim_position, rotation);
 
                             Quaternion i_rotation = rotation * new Quaternion(iapart.quaternion[interpolation_index][0], iapart.quaternion[interpolation_index][1], iapart.quaternion[interpolation_index][2], iapart.quaternion[interpolation_index][3]);
-
                             rotation = rotation * new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]);
-                            //if (count < d_crossfade && Main.walking_go.last_animation.name != name) i_rotation = tpart.rotation;
 
-                            tpart.rotation = Quaternion.Lerp(i_rotation, rotation, step);
+                            if (animation.times.Length > 1)
+                            {
+                                bool valid = isValidMatrix(i_target_pos, i_rotation);
+                                tpart.position = Vector3.Lerp(valid ? i_target_pos : target_pos, target_pos, step);
+                                tpart.rotation = Quaternion.Lerp(valid ? i_rotation : rotation, rotation, step);
+                            }
+                            else
+                            {
+                                tpart.position = target_pos;
+                                tpart.rotation = rotation;
+                            }
                         }
                         catch (Exception e)
                         {
-                            UnityModManager.Logger.Log("Error playing frame " + e.Message + " " + index + " ");
+                            UnityModManager.Logger.Log("Error playing frame " + e.Message + " " + index + " " + interpolation_index);
                         }
                     }
                 }
@@ -292,6 +301,51 @@ namespace walking_mod
                     if (Main.walking_go.last_animation.name != name) Main.walking_go.last_animation = new AnimController(this);
                 }
             }
+        }
+
+        public static bool isValidMatrix(Vector3 position, Quaternion rotation)
+        {
+            if (position == null || rotation == null)
+            {
+                UnityModManager.Logger.Log("Transform is null.");
+                return false;
+            }
+
+            if (float.IsInfinity(position.x) || float.IsInfinity(position.y) || float.IsInfinity(position.z))
+            {
+                UnityModManager.Logger.Log("Transform position has infinity value(s).");
+                return false;
+            }
+
+            if (float.IsNaN(position.x) || float.IsNaN(position.y) || float.IsNaN(position.z))
+            {
+                UnityModManager.Logger.Log("Transform position has NaN value(s).");
+                return false;
+            }
+
+            if (float.IsInfinity(rotation.x) || float.IsInfinity(rotation.y) || float.IsInfinity(rotation.z) || float.IsInfinity(rotation.w))
+            {
+                UnityModManager.Logger.Log("Transform rotation has infinity value(s).");
+                return false;
+            }
+
+            if (float.IsNaN(rotation.x) || float.IsNaN(rotation.y) || float.IsNaN(rotation.z) || float.IsNaN(rotation.w))
+            {
+                UnityModManager.Logger.Log("Transform rotation has NaN value(s).");
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool HasNaNValues(Quaternion q)
+        {
+            return float.IsNaN(q.x) || float.IsNaN(q.y) || float.IsNaN(q.z) || float.IsNaN(q.w);
+        }
+
+        public static bool HasNaNValues(Vector3 v)
+        {
+            return float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z);
         }
 
         Quaternion EnsureQuaternionContinuity(Quaternion last, Quaternion curr)

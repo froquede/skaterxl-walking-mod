@@ -11,6 +11,8 @@
             this.duration = duration;
             this.times = times;
             this.parts = parts;
+
+            if (this.times.Length == 0) this.times = new float[] { duration - .02f };
         }
 
         public override string ToString()

@@ -84,7 +84,7 @@ namespace walking_mod
                     visible = true;
                     rb = true;
                 }
-                else if(!emote_config) resetState();
+                else if (!emote_config && !sound_emote_config) resetState();
             }
 
             dpad = "";
@@ -93,22 +93,25 @@ namespace walking_mod
             if (GetButtonDown(69)) dpad = "right";
             if (GetButtonDown(67)) dpad = "top";
 
-            if (emote_config)
+            if (emote_config || sound_emote_config)
             {
                 if (config_count > 48) ChangeSelect(dpad);
                 dpad = "";
 
                 if (GetButtonDown("B"))
                 {
-                    emote_config = false;
+                    if (emote_config) emote_config = false;
+                    if (sound_emote_config) sound_emote_config = false;
                     UISounds.Instance.PlayOneShotExit();
                 }
 
                 if (GetButtonDown("A") && config_count > 48)
                 {
-                    Main.walking_go.changeEmote(Main.walking_go.emotes[selected]);
+                    if (emote_config) Main.walking_go.changeEmote(Main.walking_go.emotes[selected]);
+                    if (sound_emote_config) Main.walking_go.changeSoundEmote(Main.walking_go.soundEmotes[selected]);
                     UISounds.Instance.PlayOneShotSelectMajor();
-                    emote_config = false;
+                    if (emote_config) emote_config = false;
+                    if (sound_emote_config) sound_emote_config = false;
                 }
 
                 config_count++;
@@ -118,7 +121,7 @@ namespace walking_mod
             if (dpad != "") show_change_btn = true;
             else show_change_btn = false;
 
-            if (!Main.walking_go.inState && !emote_config) resetState();
+            if (!Main.walking_go.inState && !emote_config && !sound_emote_config) resetState();
         }
 
         bool GetButtonDown(string button)
@@ -136,11 +139,12 @@ namespace walking_mod
         {
             if (debounce > 12)
             {
-                if (dpad == "top" && selected > 0) {
+                if (dpad == "top" && selected > 0)
+                {
                     selected--;
                     UISounds.Instance.PlayOneShotSelectionChange();
-                } 
-                if (dpad == "down" && selected < Main.walking_go.emotes.Count - 1)
+                }
+                if (dpad == "down" && selected < (emote_config ? Main.walking_go.emotes.Count - 1 : Main.walking_go.soundEmotes.Count - 1))
                 {
                     selected++;
                     UISounds.Instance.PlayOneShotSelectionChange();
@@ -154,6 +158,7 @@ namespace walking_mod
         {
             visible = false;
             emote_config = false;
+            sound_emote_config = false;
             debounce = 0;
             config_count = 0;
         }
@@ -172,7 +177,7 @@ namespace walking_mod
 
             GUI.DrawTexture(new Rect((Screen.width / 60) + 54.5f, (Screen.height / 2) - dpad_icon.height / 2, dpad_icon.width, dpad_icon.height), dpad_icon);
             if (lb || emote_config) GUI.DrawTexture(new Rect((Screen.width / 60) + 88f, (Screen.height / 2) - user_icon.height / 2, user_icon.width, user_icon.height), user_icon);
-            if (rb) GUI.DrawTexture(new Rect((Screen.width / 60) + 86f, (Screen.height / 2) - sound_icon.height / 2, sound_icon.width, sound_icon.height), sound_icon);
+            if (rb || sound_emote_config) GUI.DrawTexture(new Rect((Screen.width / 60) + 86f, (Screen.height / 2) - sound_icon.height / 2, sound_icon.width, sound_icon.height), sound_icon);
 
             if (lb || emote_config)
             {
@@ -191,7 +196,7 @@ namespace walking_mod
                 if (show_change_btn) GUI.DrawTexture(new Rect(36 + (Screen.width / 60), (Screen.height / 2) + (circularTexture.height / 2) + 12, change_emote_btn.width, change_emote_btn.height), change_emote_btn);
             }
 
-            if (rb)
+            if (rb || sound_emote_config)
             {
                 try
                 {
@@ -205,24 +210,25 @@ namespace walking_mod
                     UnityModManager.Logger.Log("Error ui " + (Main.walking_go.emote3 == null));
                 }
 
-                //if (show_change_btn) GUI.DrawTexture(new Rect(36 + (Screen.width / 60), (Screen.height / 2) + (circularTexture.height / 2) + 12, change_emote_btn.width, change_emote_btn.height), change_emote_btn);
+                if (show_change_btn) GUI.DrawTexture(new Rect(36 + (Screen.width / 60), (Screen.height / 2) + (circularTexture.height / 2) + 12, change_emote_btn.width, change_emote_btn.height), change_emote_btn);
             }
 
-            if (emote_config)
+            if (emote_config || sound_emote_config)
             {
                 int origin_list_x = (Screen.width / 60) + 220;
                 int origin_list_y = (Screen.height / 2) - list_bg.height / 2;
                 GUI.DrawTexture(new Rect(origin_list_x, origin_list_y, list_bg.width, list_bg.height), list_bg);
 
                 int length = selected + 6;
-                if (length > Main.walking_go.emotes.Count) length = Main.walking_go.emotes.Count;
+                if (emote_config && length > Main.walking_go.emotes.Count) length = Main.walking_go.emotes.Count;
+                if (sound_emote_config && length > Main.walking_go.soundEmotes.Count) length = Main.walking_go.soundEmotes.Count;
 
                 GUI.DrawTexture(new Rect(origin_list_x, origin_list_y + 8, selected_bg.width, selected_bg.height), selected_bg);
 
                 for (int i = selected; i < length; i++)
                 {
                     int offset = 16 + (32 * (i - selected));
-                    EllipsisText(new Rect(origin_list_x + 20, origin_list_y + offset, 154, 34), "" + Main.walking_go.emotes[i].ToUpper() + "", false);
+                    EllipsisText(new Rect(origin_list_x + 20, origin_list_y + offset, 154, 34), "" + (emote_config ? Main.walking_go.emotes[i].ToUpper() : Main.walking_go.soundEmotes[i].ToUpper()) + "", false);
                 }
 
                 GUI.DrawTexture(new Rect(origin_list_x + list_bg.width, origin_list_y - 6 + (dpad_input.height / 2), dpad_input.width, dpad_input.height), dpad_input);
