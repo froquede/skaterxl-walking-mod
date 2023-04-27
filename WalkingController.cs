@@ -978,7 +978,7 @@ namespace walking_mod
             AnimController new_emote;
             if (!cache.ContainsKey(key))
             {
-                new_emote = new AnimController(Path.Combine(Main.modEntry.Path, "animations\\" + key + ".wav"), fs, false, 1);
+                new_emote = new AnimController(Path.Combine(Main.modEntry.Path, "animations\\" + key + ".json"), fs, false, 1);
                 cache.Add(key, new_emote);
             }
             else { new_emote = cache[key]; }
