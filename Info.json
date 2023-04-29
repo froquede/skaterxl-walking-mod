@@ -2,7 +2,7 @@
   "Id": "walking-mod",
   "DisplayName": "Walking Mod",
   "Author": "froquede",
-  "Version": "1.0.0-rc2",
+  "Version": "1.0.1",
   "ManagerVersion": "0.22.5.0",
   "Requirements": [],
   "LoadAfter": ["XXLMod3"],

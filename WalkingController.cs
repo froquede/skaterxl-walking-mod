@@ -1387,7 +1387,7 @@ namespace walking_mod
                 press_count = 0;
             }
 
-            bool bailmode = bail_magnitude <= Main.settings.max_magnitude_bail && PlayerController.Instance.currentStateEnum == PlayerController.CurrentState.Bailed && dot >= 0f;
+            bool bailmode = (bail_magnitude < Main.settings.max_magnitude_bail) && (PlayerController.Instance.currentStateEnum == PlayerController.CurrentState.Bailed) && (dot >= 0f);
             if (press_count >= Main.settings.frame_wait || bailmode)
             {
                 EnterWalkMode(bailmode);
