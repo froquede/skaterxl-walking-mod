@@ -177,6 +177,9 @@ namespace walking_mod
         {
             if (fs.self && isPlaying)
             {
+                bool interpolateActual = false;
+                if (Time.fixedUnscaledTime - Main.walking_go.enterBailTimestamp <= .5f && Main.walking_go.enterFromBail) interpolateActual = true;
+
                 int index = 0;
 
                 for (int i = 0; i < animation.times.Length; i++)
@@ -187,7 +190,7 @@ namespace walking_mod
 
                 if (Main.walking_go.last_animation == null) Main.walking_go.last_animation = new AnimController(this);
 
-                int d_crossfade = Main.walking_go.last_animation.name != name && doCrossfade ? 10 : doCrossfade ? crossfade : 0;
+                int d_crossfade = (Main.walking_go.last_animation.name != name && doCrossfade || interpolateActual) ? 10 : doCrossfade ? crossfade : 0;
                 float step = 0;
 
                 if (count < d_crossfade) index = 0;
@@ -233,8 +236,7 @@ namespace walking_mod
                             AnimationJSONPart apart = (AnimationJSONPart)property.GetValue(animation.parts, null);
                             AnimationJSONPart iapart = (AnimationJSONPart)property.GetValue(i_animation.parts, null);
 
-                            float i_time = i_animation.times.Length - 1 >= interpolation_index ? i_animation.times[interpolation_index] : 0;
-                            if (i_time > animation.times[index]) i_time = 0;
+                            float i_time = i_animation.times.Length - 1 >= interpolation_index ? i_animation.times[interpolation_index] : i_animation.times[0];
 
                             float istep = animation.times[index] - i_time;
                             float diff = animTime - i_time;
@@ -257,11 +259,18 @@ namespace walking_mod
                             Quaternion i_rotation = rotation * new Quaternion(iapart.quaternion[interpolation_index][0], iapart.quaternion[interpolation_index][1], iapart.quaternion[interpolation_index][2], iapart.quaternion[interpolation_index][3]);
                             rotation = rotation * new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]);
 
+                            if (interpolateActual)
+                            {
+                                i_target_pos = tpart.position;
+                                i_rotation = tpart.rotation;
+                                step = Time.deltaTime * 24f;
+                            }
+
                             if (animation.times.Length > 1)
                             {
                                 bool valid = isValidMatrix(i_target_pos, i_rotation);
-                                tpart.position = Vector3.Lerp(valid ? i_target_pos : target_pos, target_pos, step);
-                                tpart.rotation = Quaternion.Lerp(valid ? i_rotation : rotation, rotation, step);
+                                tpart.position = Vector3.Lerp(valid ? i_target_pos : tpart.position, target_pos, step);
+                                tpart.rotation = Quaternion.Lerp(valid ? i_rotation : tpart.rotation, rotation, step);
                             }
                             else
                             {

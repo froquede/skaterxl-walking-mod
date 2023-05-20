@@ -19,7 +19,7 @@ namespace walking_mod
         public Vector3 temprot = Vector3.zero;
         public float throwdown_force = 25f;
         public float max_magnitude_bail = 8f;
-        public float minVelocityRoll = 0.5f;
+        public float minVelocityRoll = 0.3f;
         public float smooth_factor_transition = .25f;
         public float camera_pos_vel = 10f, camera_rot_vel = 4f;
         public float bailLimit = 2f;
@@ -29,6 +29,7 @@ namespace walking_mod
         public string jump_button = "B";
         public string magnetize_button = "X";
         public string pin_button = "Y";
+        public bool mallgrab = false;
 
         public float idle_jump_force = 1f, running_jump_force = 2.5f, flip_jump_force = 3f, hippie_jump_force = 2.5f;
         public void OnChange()

@@ -89,6 +89,7 @@ namespace walking_mod
             {
                 GUILayout.FlexibleSpace();
 
+                GUI.backgroundColor = Color.black;
                 GUILayout.BeginVertical(GUILayout.Width(width));
                 {
                     GUILayout.BeginVertical(box, GUILayout.Width(width));
@@ -97,7 +98,7 @@ namespace walking_mod
                         GUILayout.Space(12);
                         settings.throwdown_force = Slider("Throwdown force (" + settings.throwdown_force.ToString("N0") + ")", settings.throwdown_force, 0f, 50f, .1f, 25f);
                         settings.max_magnitude_bail = Slider("Max bail force to stumble (" + settings.max_magnitude_bail.ToString("N2") + ")", settings.max_magnitude_bail, 0f, 20f, .1f, 8f, "0 is always bail");
-                        settings.minVelocityRoll = Slider("Roll limiter (" + settings.minVelocityRoll.ToString("N2") + ")", settings.minVelocityRoll, 0f, 1f, .05f, .5f, "0 is always roll after impact");
+                        settings.minVelocityRoll = Slider("Roll limiter (" + settings.minVelocityRoll.ToString("N2") + ")", settings.minVelocityRoll, 0f, 1f, .05f, .3f, "0 is always roll after impact");
                         settings.bailLimit = Slider("Respawn on skate after bail limit (" + settings.bailLimit.ToString("N2") + ")", settings.bailLimit, 0f, 20f, .05f, 2f, "This limits the time you want to use to respawn walking or skating in \nseconds");
                         settings.frame_wait = (int)Slider("Button press wait (" + settings.frame_wait.ToString("N0") + ")", settings.frame_wait, 0f, 64f, 1f, 12f, "The amount of frames to wait to enter walk mode");
                     }
@@ -217,6 +218,7 @@ namespace walking_mod
             }
             GUILayout.Space(6);
             GUILayout.BeginHorizontal();
+            GUI.backgroundColor = Color.white;
             float result = GUILayout.HorizontalScrollbar(value, step, min, max + step);
             if (GUILayout.Button("reset", GUILayout.Height(20), GUILayout.Width(60))) result = default_value;
             GUILayout.EndHorizontal();
