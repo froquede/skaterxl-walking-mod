@@ -21,7 +21,7 @@ namespace walking_mod
         public float max_magnitude_bail = 8f;
         public float minVelocityRoll = 0.3f;
         public float smooth_factor_transition = .25f;
-        public float camera_pos_vel = 10f, camera_rot_vel = 4f;
+        public float camera_pos_vel = 20f, camera_rot_vel = 8f;
         public float bailLimit = 2f;
         public bool left_arm = false;
         public bool hippie_jump = false;
@@ -30,6 +30,7 @@ namespace walking_mod
         public string magnetize_button = "X";
         public string pin_button = "Y";
         public bool mallgrab = false;
+        public float step_off_limit = 7f;
 
         public float idle_jump_force = 1f, running_jump_force = 2.5f, flip_jump_force = 3f, hippie_jump_force = 2.5f;
         public void OnChange()

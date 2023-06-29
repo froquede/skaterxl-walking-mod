@@ -23,7 +23,7 @@ namespace walking_mod
         public Quaternion rotation_offset = Quaternion.Euler(0, 0, 0), original_rotation = Quaternion.identity;
         CallBack callback;
         bool loop = true;
-        public bool anchorRoot = false, doCrossfade = true;
+        public bool anchorRoot = false, doCrossfade = true, offsetPelvis = false;
         public float speed = 1f;
         public float timeLimit = 0f, timeLimitStart = 0f;
 
@@ -54,6 +54,7 @@ namespace walking_mod
             first_frame_pelvis = origin.first_frame_pelvis;
             anchorRootFade = origin.anchorRootFade;
             anchorRootSpeed = origin.anchorRootSpeed;
+            offsetPelvis = origin.offsetPelvis;
         }
 
         public AnimController()
@@ -133,7 +134,7 @@ namespace walking_mod
             }
             else
             {
-                MessageSystem.QueueMessage(MessageDisplayData.Type.Error, "Error loading animation '" + name + "', file doesn't exists", 3f);
+                MessageSystem.QueueMessage(MessageDisplayData.Type.Error, "Error loading animation '" + path + "', file doesn't exist", 3f);
                 return;
             }
 
@@ -155,10 +156,10 @@ namespace walking_mod
                 }
             }
 
-            try
-            {
-                anchorRoot = json_parsed["anchorRoot"] == null ? anchorRoot : (bool)json_parsed["anchorRoot"];
-            }
+            try { anchorRoot = json_parsed["anchorRoot"] == null ? anchorRoot : (bool)json_parsed["anchorRoot"]; }
+            catch { }
+
+            try { offsetPelvis = json_parsed["offset_pelvis"] == null ? offsetPelvis : (bool)json_parsed["offset_pelvis"]; }
             catch { }
 
             animation = new AnimationJSON((float)json_parsed["duration"], Newtonsoft.Json.JsonConvert.DeserializeObject<float[]>(json_parsed["times"].ToString()), parts);
@@ -190,7 +191,7 @@ namespace walking_mod
 
                 if (Main.walking_go.last_animation == null) Main.walking_go.last_animation = new AnimController(this);
 
-                int d_crossfade = (Main.walking_go.last_animation.name != name && doCrossfade || interpolateActual) ? 10 : doCrossfade ? crossfade : 0;
+                int d_crossfade = (Main.walking_go.last_animation.name != name && doCrossfade || interpolateActual) ? 16 : doCrossfade ? crossfade : 0;
                 float step = 0;
 
                 if (count < d_crossfade) index = 0;
@@ -263,7 +264,7 @@ namespace walking_mod
                             {
                                 i_target_pos = tpart.position;
                                 i_rotation = tpart.rotation;
-                                step = Time.deltaTime * 24f;
+                                step = Time.deltaTime * 12f;
                             }
 
                             if (animation.times.Length > 1)

@@ -98,6 +98,7 @@ namespace walking_mod
                         GUILayout.Space(12);
                         settings.throwdown_force = Slider("Throwdown force (" + settings.throwdown_force.ToString("N0") + ")", settings.throwdown_force, 0f, 50f, .1f, 25f);
                         settings.max_magnitude_bail = Slider("Max bail force to stumble (" + settings.max_magnitude_bail.ToString("N2") + ")", settings.max_magnitude_bail, 0f, 20f, .1f, 8f, "0 is always bail");
+                        settings.step_off_limit = Slider("Step off velocity limit (" + settings.step_off_limit.ToString("N2") + ")", settings.step_off_limit, 0f, 20f, .1f, 7f, "0 will make the board to never be magnetized");
                         settings.minVelocityRoll = Slider("Roll limiter (" + settings.minVelocityRoll.ToString("N2") + ")", settings.minVelocityRoll, 0f, 1f, .05f, .3f, "0 is always roll after impact");
                         settings.bailLimit = Slider("Respawn on skate after bail limit (" + settings.bailLimit.ToString("N2") + ")", settings.bailLimit, 0f, 20f, .05f, 2f, "This limits the time you want to use to respawn walking or skating in \nseconds");
                         settings.frame_wait = (int)Slider("Button press wait (" + settings.frame_wait.ToString("N0") + ")", settings.frame_wait, 0f, 64f, 1f, 12f, "The amount of frames to wait to enter walk mode");
@@ -155,8 +156,8 @@ namespace walking_mod
 
                         GUILayout.Label("<b>Velocity</b>", subtitle);
                         GUILayout.Space(10);
-                        settings.camera_pos_vel = Slider("Position (" + settings.camera_pos_vel.ToString("N2") + ")", settings.camera_pos_vel, 0f, 20f, .1f, 10f);
-                        settings.camera_rot_vel = Slider("Rotation (" + settings.camera_rot_vel.ToString("N2") + ")", settings.camera_rot_vel, 0f, 20f, .1f, 4f);
+                        settings.camera_pos_vel = Slider("Position (" + settings.camera_pos_vel.ToString("N2") + ")", settings.camera_pos_vel, 0f, 40f, .1f, 20f);
+                        settings.camera_rot_vel = Slider("Rotation (" + settings.camera_rot_vel.ToString("N2") + ")", settings.camera_rot_vel, 0f, 40f, .1f, 8f);
                         GUILayout.Space(6);
                     }
                     GUILayout.EndVertical();
