@@ -63,8 +63,9 @@ namespace walking_mod
                 collider = self.AddComponent<CapsuleCollider>();
                 collider.height = 1.4404f;
                 collider.radius = .2f;
-                collider.material.dynamicFriction = .225f;
+                collider.material.dynamicFriction = .3f;
                 collider.material.staticFriction = .6f;
+                collider.material.bounciness = 1f;
 
                 cache = new Dictionary<string, Transform>();
 

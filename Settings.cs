@@ -21,7 +21,7 @@ namespace walking_mod
         public float max_magnitude_bail = 8f;
         public float minVelocityRoll = 0.3f;
         public float smooth_factor_transition = .25f;
-        public float camera_pos_vel = 20f, camera_rot_vel = 8f;
+        public float camera_pos_vel = 20f, camera_rot_vel = 20f;
         public float bailLimit = 2f;
         public bool left_arm = false;
         public bool hippie_jump = false;

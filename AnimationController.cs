@@ -174,12 +174,13 @@ namespace walking_mod
             if (timeLimitStart == 0f) timeLimitStart = animation.times[0];
         }
 
+        float stiffness = 200f, damping = 40f;
+        Dictionary<string, Vector3> velocity = new Dictionary<string, Vector3>();
         public void Update()
         {
             if (fs.self && isPlaying)
             {
                 bool interpolateActual = false;
-                if (Time.fixedUnscaledTime - Main.walking_go.enterBailTimestamp <= .5f && Main.walking_go.enterFromBail) interpolateActual = true;
 
                 int index = 0;
 
@@ -191,7 +192,13 @@ namespace walking_mod
 
                 if (Main.walking_go.last_animation == null) Main.walking_go.last_animation = new AnimController(this);
 
-                int d_crossfade = (Main.walking_go.last_animation.name != name && doCrossfade || interpolateActual) ? 16 : doCrossfade ? crossfade : 0;
+                int d_crossfade = (Main.walking_go.last_animation.name != name && doCrossfade) ? 14 : doCrossfade ? crossfade : 0;
+                if (Time.fixedUnscaledTime - Main.walking_go.enterBailTimestamp <= .14f && Main.walking_go.enterFromBail)
+                {
+                    interpolateActual = true;
+                    d_crossfade = (int)(.14f / Time.fixedDeltaTime);
+                }
+
                 float step = 0;
 
                 if (count < d_crossfade) index = 0;
@@ -245,7 +252,7 @@ namespace walking_mod
 
                             if (count < d_crossfade && Main.walking_go.last_animation.name != name)
                             {
-                                step = (((float)count + 1) / (float)d_crossfade);
+                                step = ((float)count + 1f) / (float)d_crossfade;
                             }
 
                             Vector3 anim_position = new Vector3(apart.position[index][0], apart.position[index][1], apart.position[index][2]);
@@ -264,14 +271,17 @@ namespace walking_mod
                             {
                                 i_target_pos = tpart.position;
                                 i_rotation = tpart.rotation;
-                                step = Time.deltaTime * 12f;
+                                step = Time.fixedDeltaTime * 24f;
                             }
 
                             if (animation.times.Length > 1)
                             {
                                 bool valid = isValidMatrix(i_target_pos, i_rotation);
-                                tpart.position = Vector3.Lerp(valid ? i_target_pos : tpart.position, target_pos, step);
-                                tpart.rotation = Quaternion.Lerp(valid ? i_rotation : tpart.rotation, rotation, step);
+
+                                tpart.position = Vector3.Slerp(valid ? i_target_pos : tpart.position, target_pos, step);
+                                tpart.rotation = Quaternion.Slerp(valid ? i_rotation : tpart.rotation, rotation, step);
+
+                                if(!valid) { UnityModManager.Logger.Log(step + " " + index + " " + interpolation_index + " " + i_animation.times.Length); }
                             }
                             else
                             {
@@ -286,7 +296,7 @@ namespace walking_mod
                     }
                 }
 
-                if (count >= d_crossfade) animTime += Time.smoothDeltaTime * speed;
+                if (count >= d_crossfade) animTime += Time.fixedDeltaTime * speed;
 
                 count++;
 

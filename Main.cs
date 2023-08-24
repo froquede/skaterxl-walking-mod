@@ -156,8 +156,8 @@ namespace walking_mod
 
                         GUILayout.Label("<b>Velocity</b>", subtitle);
                         GUILayout.Space(10);
-                        settings.camera_pos_vel = Slider("Position (" + settings.camera_pos_vel.ToString("N2") + ")", settings.camera_pos_vel, 0f, 40f, .1f, 20f);
-                        settings.camera_rot_vel = Slider("Rotation (" + settings.camera_rot_vel.ToString("N2") + ")", settings.camera_rot_vel, 0f, 40f, .1f, 8f);
+                        settings.camera_pos_vel = Slider("Position (" + settings.camera_pos_vel.ToString("N2") + ")", settings.camera_pos_vel, 0f, 40f, .01f, 20f);
+                        settings.camera_rot_vel = Slider("Rotation (" + settings.camera_rot_vel.ToString("N2") + ")", settings.camera_rot_vel, 0f, 40f, .01f, 20f);
                         GUILayout.Space(6);
                     }
                     GUILayout.EndVertical();
@@ -196,6 +196,8 @@ namespace walking_mod
 
                         if (GUILayout.Button("Reload only emotes", GUILayout.Height(32), GUILayout.Width(width - 4))) walking_go.LoadEmotes();
                         if (GUILayout.Button("Reload only sound emotes", GUILayout.Height(32), GUILayout.Width(width - 4))) walking_go.LoadSoundEmotes();
+
+                        if (GUILayout.Button("Enter golf", GUILayout.Height(32), GUILayout.Width(width - 4))) walking_go.Golf();
                     }
                     GUILayout.EndVertical();
                 }

@@ -34,7 +34,7 @@ namespace walking_mod
         AudioClip[] sounds;
         public AnimController actual_anim;
         public bool inState = false;
-        GameObject fallbackCamera;
+        public GameObject fallbackCamera;
         GameObject fakeSkate;
         Transform[] fakeTrucks = new Transform[2];
         CinemachineVirtualCamera main_cam, fall_cam;
@@ -155,7 +155,7 @@ namespace walking_mod
             }
         }
 
-        int walking_crossfade = 1;
+        int walking_crossfade = 0;
         Task InitAnimations()
         {
             walking = LoadAnim(new AnimController(Path.Combine(Main.modEntry.Path, "animations\\walking.json"), fs, true, walking_crossfade));
@@ -185,10 +185,10 @@ namespace walking_mod
             back_flip.speed = 1.1f;
 
             throwdown_lhrf = LoadAnim(new AnimController(Path.Combine(Main.modEntry.Path, "animations\\run_throwdown_lhrf.json"), fs, false));
-            throwdown_lhrf.timeLimit = 0.396f;
+            throwdown_lhrf.timeLimit = 0.4f;
 
             throwdown_lhlf = LoadAnim(new AnimController(Path.Combine(Main.modEntry.Path, "animations\\run_throwdown_lhlf.json"), fs, false));
-            throwdown_lhlf.timeLimit = 0.396f;
+            throwdown_lhlf.timeLimit = 0.4f;
 
             throwdown_lhrf.speed = throwdown_lhlf.speed = 1.25f;
 
@@ -431,13 +431,13 @@ namespace walking_mod
 
                 if (MultiplayerManager.Instance.InRoom)
                 {
-                    PlayerController.Instance.skaterController.skaterTransform.Find("Skater").gameObject.SetActive(false);
                     PlayerController.Instance.boardController.boardTransform.gameObject.SetActive(false);
+                    PlayerController.Instance.skaterController.skaterTransform.Find("Skater").gameObject.SetActive(false);
                 }
             }
-            catch
+            catch (Exception e)
             {
-                Log("Error creating FS");
+                Log("Error creating FS " + e.Message);
             }
         }
 
@@ -479,6 +479,8 @@ namespace walking_mod
                 if (EventManager.Instance.IsInCombo) EventManager.Instance.EndTrickCombo(false, true);
             }
 
+            PlayerController.Instance.comController.enabled = true;
+            PlayerController.Instance.ikController.enabled = true;
             PlayerController.Instance.animationController.enabled = true;
             PlayerController.Instance.animationController.ToggleAnimators(true);
             PlayerController.Instance.inputController.enabled = true;
@@ -492,14 +494,6 @@ namespace walking_mod
             if (last_nonplaytime != 0) Traverse.Create(playtimeobj).Field("nonPlayTime").SetValue(last_nonplaytime);
         }
 
-        Quaternion EnsureQuaternionContinuity(Quaternion last, Quaternion curr)
-        {
-            if (last.x * curr.x + last.y * curr.y + last.z * curr.z + last.w * curr.w < 0f)
-            {
-                return new Quaternion(-curr.x, -curr.y, -curr.z, -curr.w);
-            }
-            return curr;
-        }
 
         bool Sideway()
         {
@@ -581,7 +575,7 @@ namespace walking_mod
 
                 if (Time.fixedUnscaledTime - last_rotation_timestamp >= 1f)
                 {
-                    cam_rotation = Quaternion.Lerp(cam_rotation, Quaternion.identity, Time.fixedDeltaTime);
+                    cam_rotation = Quaternion.Slerp(cam_rotation, Quaternion.identity, Time.fixedDeltaTime);
                 }
                 else
                 {
@@ -592,6 +586,7 @@ namespace walking_mod
             if (MultiplayerManager.Instance.InRoom && !respawning && !PlayerController.Instance.respawn.respawning) UpdateRagdoll();
 
             PlayerController.Instance.boardController.boardRigidbody.isKinematic = magnetized;
+            fakeSkate.GetComponent<Rigidbody>().isKinematic = magnetized;
 
             UpdateGameplay();
 
@@ -714,6 +709,7 @@ namespace walking_mod
                 }
 
                 if (!originalRespawn) RespawnRoutineCoroutines();
+                GrindPart();
 
                 Traverse.Create(playtimeobj).Field("isInPlayState").SetValue(GameStateMachine.Instance.CurrentState.GetType() == typeof(PlayState));
             }
@@ -763,6 +759,7 @@ namespace walking_mod
         public bool respawning = false;
         void DoRespawn(bool force = false)
         {
+            golf = false;
             cam_rotation = Quaternion.identity;
             if (Time.unscaledTime - enterBailTimestamp >= Main.settings.bailLimit || force)
             {
@@ -839,7 +836,7 @@ namespace walking_mod
 
             PlayerTransformStateHalf transformState = default(PlayerTransformStateHalf);
             transformState.boardPosition = fakeSkate.transform.position;
-            if (ReplayRecorder.Instance.transformReference.lastState != null && throwdown_state && !respawnSwitch) transformState.boardRotation = EnsureQuaternionContinuity(ReplayRecorder.Instance.transformReference.lastState.Value.boardRotation, fakeSkate.transform.rotation);
+            if (ReplayRecorder.Instance.transformReference.lastState != null && throwdown_state && !respawnSwitch) transformState.boardRotation = Utils.EnsureQuaternionContinuity(ReplayRecorder.Instance.transformReference.lastState.Value.boardRotation, fakeSkate.transform.rotation);
             else transformState.boardRotation = fakeSkate.transform.rotation;
 
             transformState.boardWheelSpeeds.SetAll(0);
@@ -852,7 +849,7 @@ namespace walking_mod
                 {
                     int i2 = i;
                     PlayerTransformStateHalf value = ReplayRecorder.Instance.transformReference.lastState.Value;
-                    transformState.boardTruckLocalRotations[i2] = EnsureQuaternionContinuity(value.boardTruckLocalRotations[i], fakeTrucks[i].localRotation);
+                    transformState.boardTruckLocalRotations[i2] = Utils.EnsureQuaternionContinuity(value.boardTruckLocalRotations[i], fakeTrucks[i].localRotation);
                 }
                 else
                 {
@@ -863,17 +860,17 @@ namespace walking_mod
             transformState.skaterRootPosition = fs.self.transform.position;
             if (ReplayRecorder.Instance.transformReference.lastState != null)
             {
-                transformState.skaterRootRotation = this.EnsureQuaternionContinuity(ReplayRecorder.Instance.transformReference.lastState.Value.skaterRootRotation, fs.self.transform.rotation * Quaternion.identity);
+                transformState.skaterRootRotation = Utils.EnsureQuaternionContinuity(ReplayRecorder.Instance.transformReference.lastState.Value.skaterRootRotation, fs.self.transform.rotation * Quaternion.identity);
             }
             else
             {
-                transformState.skaterRootRotation = fs.self.transform.rotation * Quaternion.identity;
+                transformState.skaterRootRotation = fs.self.transform.rotation;
             }
 
             for (int j = 0; j < ReplayRecorder.Instance.transformReference.skaterMainBones.Length; j++)
             {
                 Quaternion rot = fs.getPart(ReplayRecorder.Instance.transformReference.skaterMainBones[j].name).localRotation;
-                if (ReplayRecorder.Instance.transformReference.lastState != null) transformState.skaterBoneLocalRotations[j] = EnsureQuaternionContinuity(ReplayRecorder.Instance.transformReference.lastState.Value.skaterBoneLocalRotations[j], rot);
+                if (ReplayRecorder.Instance.transformReference.lastState != null) transformState.skaterBoneLocalRotations[j] = Utils.EnsureQuaternionContinuity(ReplayRecorder.Instance.transformReference.lastState.Value.skaterBoneLocalRotations[j], rot);
                 else transformState.skaterBoneLocalRotations[j] = rot;
             }
 
@@ -963,11 +960,13 @@ namespace walking_mod
                 Physics.SyncTransforms();
                 if (left_grounded || right_grounded || climbingStairs || jumping)
                 {
+                    Vector3 climbingDirectionOnPlane = Vector3.ProjectOnPlane(transform.forward, averageNormal).normalized;
                     move = transform.right * LX + transform.forward * LY;
                     fs.rb.AddForce(-fs.rb.velocity * decay);
                     if (fs.rb.velocity.magnitude <= max_speed && !grinding)
                     {
-                        fs.rb.AddRelativeForce(move * (speed * (jumping ? .5f : actual_state == "running" ? 1.25f : 1f)));
+                        Vector3 projected = move * (speed * (jumping ? .5f : actual_state == "running" ? 1.25f : 1f));
+                        fs.rb.AddRelativeForce(projected);
                     }
                 }
 
@@ -1097,7 +1096,7 @@ namespace walking_mod
         {
             return PlayerController.Instance.inputController.player.GetButtonSinglePressHold(button) || PlayerController.Instance.inputController.player.GetButtonSinglePressDown(button);
         }
-        bool GetButtonDown(string button)
+        public bool GetButtonDown(string button)
         {
             return PlayerController.Instance.inputController.player.GetButtonDown(button) || PlayerController.Instance.inputController.player.GetButton(button) || PlayerController.Instance.inputController.player.GetButtonShortPressDown(button) || PlayerController.Instance.inputController.player.GetButtonLongPressDown(button);
         }
@@ -1127,6 +1126,7 @@ namespace walking_mod
             }
             else
             {
+                float dSpeed = .75f + (.1f * (float)(Math.Sin(Time.fixedUnscaledTime) / 10f)) + (relativeVelocity.magnitude * 5f);
                 if (actual_state == "running")
                 {
                     if (forward_velocity >= side_velocity)
@@ -1138,7 +1138,7 @@ namespace walking_mod
                         Play(relativeVelocity.x > 0 ? running_left : running_right);
                     }
 
-                    actual_anim.speed = 1f + (float)(Math.Sin(Time.fixedUnscaledTime) / 10f);
+                    actual_anim.speed = dSpeed;
                 }
                 else
                 {
@@ -1153,7 +1153,7 @@ namespace walking_mod
                         {
                             Play(relativeVelocity.x > 0 ? walking_left : walking_right);
                         }
-                        actual_anim.speed = 1f + (float)(Math.Sin(Time.fixedUnscaledTime) / 10f);
+                        actual_anim.speed = dSpeed;
                     }
                 }
             }
@@ -1229,6 +1229,7 @@ namespace walking_mod
         Rigidbody skate_rb;
         bool set_bail = false;
         int throwdown_detach = 6;
+        Vector3 skate_vel_rot = Vector3.zero, skate_vel = Vector3.zero;
 
         void Board()
         {
@@ -1269,9 +1270,19 @@ namespace walking_mod
                             }
                             else
                             {
-                                deck_target.transform.Rotate(Main.settings.left_arm ? -90f : 90f, 0, 0, Space.Self);
-                                deck_target.transform.Rotate(Main.settings.left_arm ? -20f : 20f, -10f, -5, Space.Self);
-                                deck_target.transform.Translate(-.225f, .035f, Main.settings.left_arm ? .1f : -.1f, Space.Self);
+                                deck_target.transform.Rotate(90f, 0, 0, Space.Self);
+                                deck_target.transform.Rotate(20f, -10f, -5, Space.Self);
+                                deck_target.transform.Translate(-.225f, .035f, .1f, Space.Self);
+                                if (Main.settings.left_arm)
+                                {
+                                    deck_target.transform.Rotate(0, 0, 180f, Space.Self);
+                                    deck_target.transform.Rotate(45f, 0, 0f, Space.Self);
+                                    deck_target.transform.Rotate(0, 0, 10, Space.Self);
+                                    deck_target.transform.Translate(0, .015f, 0, Space.Self);
+                                }
+
+                                deck_target.transform.Translate(0, 0, -.165f, Space.Self);
+                                deck_target.transform.Translate(0, .015f, 0, Space.Self);
                             }
                         }
                         else
@@ -1308,18 +1319,20 @@ namespace walking_mod
                         float multiplier = 1f;
                         if (throwdown_anim)
                         {
-                            if (actual_anim.frame >= 16) multiplier = .15f;
+                            if (actual_anim.frame >= 16) multiplier = 6.66f;
                             else
                             {
-                                if (actual_anim.frame >= throwdown_detach) multiplier = .325f;
-                                else multiplier = .8f;
+                                if (actual_anim.frame >= throwdown_detach) multiplier = 3.07f;
+                                else multiplier = 1.25f;
                             }
                         }
-                        fakeSkate.transform.rotation = Quaternion.Slerp(fakeSkate.transform.rotation, deck_target.transform.rotation, Time.fixedDeltaTime * 72f * multiplier);
-                        fakeSkate.transform.position = Vector3.Lerp(fakeSkate.transform.position, deck_target.transform.position, Time.fixedDeltaTime * 72f * multiplier);
+                        else if (Main.settings.mallgrab) multiplier = .1f;
 
-                        fakeSkate.GetComponent<Rigidbody>().MovePosition(fakeSkate.transform.position);
-                        fakeSkate.GetComponent<Rigidbody>().MoveRotation(fakeSkate.transform.rotation);
+                        fakeSkate.transform.rotation = Utils.SmoothDampQuaternion(fakeSkate.transform.rotation, deck_target.transform.rotation, ref skate_vel_rot, .085f * (multiplier * (throwdown_anim ? .25f : 1f)));
+                        fakeSkate.transform.position = Vector3.SmoothDamp(fakeSkate.transform.position, deck_target.transform.position, ref skate_vel, .01f * (multiplier * (throwdown_anim ? 1f : 1f)));
+
+                        /*fakeSkate.GetComponent<Rigidbody>().MovePosition(fakeSkate.transform.position);
+                        fakeSkate.GetComponent<Rigidbody>().MoveRotation(fakeSkate.transform.rotation);*/
                     }
                     catch
                     {
@@ -1486,6 +1499,8 @@ namespace walking_mod
             if (respawning || busy) return;
             if (MultiplayerManager.Instance.InRoom && bailmode) return;
 
+            golf = false;
+
             if (EventManager.Instance.IsInCombo) EventManager.Instance.EndTrickCombo(false, true);
 
             lastBoardVelocity = PlayerController.Instance.boardController.boardRigidbody.velocity * 4f;
@@ -1500,10 +1515,14 @@ namespace walking_mod
             DestroyFS();
             createFS();
 
+            PlayerController.Instance.comController.enabled = false;
+            PlayerController.Instance.ikController.enabled = false;
+
             actual_state = "idle";
             Play(idle);
 
             enterFromBail = bailmode;
+            ground_check = 0;
 
             xUp = false;
             enterBailTimestamp = Time.fixedUnscaledTime;
@@ -1511,7 +1530,7 @@ namespace walking_mod
             lt_onspawn = PlayerController.Instance.inputController.player.GetButtonDown("LT");
 
             velocityOnEnter = PlayerController.Instance.skaterController.skaterRigidbody.velocity;
-            
+
             Vector3 raycastOrigin = PlayerController.Instance.skaterController.skaterTransform.position + new Vector3(0, 2f, 0);
             Vector3 old_pos = PlayerController.Instance.skaterController.skaterTransform.position;
             if (!bailmode && !hippieJump)
@@ -1556,8 +1575,10 @@ namespace walking_mod
                 spawnRotation = PlayerController.Instance.skaterController.skaterTransform.rotation;
             }
 
-            fs.self.transform.rotation = spawnRotation;
-            if (hippieJump) fs.self.transform.rotation = PlayerController.Instance.skaterController.transform.rotation;
+            /*fs.self.transform.rotation = Quaternion.Slerp(PlayerController.Instance.skaterController.skaterTransform.rotation, spawnRotation, .5f);
+            if (hippieJump) fs.self.transform.rotation = PlayerController.Instance.skaterController.transform.rotation;*/
+
+            fs.self.transform.rotation = PlayerController.Instance.skaterController.transform.rotation;
             Physics.SyncTransforms();
 
             if (PlayerController.Instance.IsSwitch) fs.self.transform.Rotate(0, 180, 0, Space.Self);
@@ -1577,6 +1598,8 @@ namespace walking_mod
                 PlayerController.Instance.CancelRespawnInvoke();
                 ResetSkater();
             }
+
+            last_y = fs.self.transform.position.y;
 
             inStateLogic();
 
@@ -1652,11 +1675,12 @@ namespace walking_mod
         float pelvis_offset = .26f;
         float averageDistance = 0, last_average = 0;
         Vector3 averageNormal = Vector3.zero;
+        Vector3 rotation_velocity = Vector3.zero;
 
         void RaycastFloor()
         {
             Vector3 center_origin = TranslateWithRotation(fs.rb.transform.position, new Vector3(0, -fs.collider.height / 4f, 0), fs.collider.transform.rotation);
-            int mask = ~(1 << LayerUtility.Character);
+            int mask = ~(1 << LayerUtility.Character | 1 << LayerUtility.Ragdoll | 1 << LayerUtility.RagdollNoInternalCollision);
 
             groundRaycastDistance = (fs.collider.height / 1.5f);
 
@@ -1697,7 +1721,7 @@ namespace walking_mod
                         }
                     }
 
-                    if ((jumping && groundHit.collider.gameObject.layer != LayerUtility.Skateboard) || !jumping)
+                    if ((jumping && 1 << groundHit.collider.gameObject.layer != LayerUtility.Skateboard) || !jumping)
                     {
                         averageNormal += groundHit.normal;
                         averagePoint += groundHit.point;
@@ -1720,7 +1744,7 @@ namespace walking_mod
                     if (!respawning)
                     {
                         Quaternion rotation = Quaternion.FromToRotation(fs.self.transform.up, averageNormal);
-                        fs.collider.transform.rotation = Quaternion.Slerp(fs.collider.transform.rotation, rotation * fs.collider.transform.rotation, Time.fixedDeltaTime * 4f);
+                        fs.collider.transform.rotation = Utils.SmoothDampQuaternion(fs.collider.transform.rotation, rotation * fs.collider.transform.rotation, ref rotation_velocity, .05f);
 
                         if (!grounded && relativeVelocity.y > Main.settings.minVelocityRoll / 10f)
                         {
@@ -1738,7 +1762,7 @@ namespace walking_mod
 
                 if (!Mathf.Approximately(side_angle, 90f) || !Mathf.Approximately(forward_angle, 90f))
                 {
-                    fs.self.transform.rotation = Quaternion.Lerp(fs.self.transform.rotation, Quaternion.Euler(averageNormal.x, fs.self.transform.rotation.eulerAngles.y, averageNormal.z), Time.fixedDeltaTime * 6f);
+                    fs.self.transform.rotation = Quaternion.Slerp(fs.self.transform.rotation, Quaternion.Euler(averageNormal.x, fs.self.transform.rotation.eulerAngles.y, averageNormal.z), Time.fixedDeltaTime * 6f);
                 }
 
                 if (actual_anim.offsetPelvis && !actual_anim.anchorRoot)
@@ -1869,16 +1893,30 @@ namespace walking_mod
             return output;
         }
 
+        float last_y = 0f;
+        Vector3 camera_velocity = Vector3.zero, camera_velocity_rotation = Vector3.zero;
+        float y_velocity = 0;
         public void UpdateCamera(bool pos, bool rot)
         {
             if (inState)
             {
+                Vector3 target = golf ? ball.transform.position : fs.getPart("Skater_pelvis").position;
                 Quaternion rotation = Quaternion.Euler(cam_rotation.eulerAngles.x, fs.rb.rotation.eulerAngles.y + cam_rotation.eulerAngles.y, 0) * Main.settings.camera_rotation_offset;
                 Vector3 rotatedTranslation = rotation * Main.settings.camera_offset;
-                Vector3 output = fs.self.transform.position + rotatedTranslation;
+                Vector3 output = new Vector3(target.x, last_y, target.z) + rotatedTranslation;
+                last_y = Mathf.SmoothDamp(last_y, target.y, ref y_velocity, (jumping ? Main.settings.camera_pos_vel / 65f : Main.settings.camera_pos_vel / 200f));
 
-                if (pos) fallbackCamera.transform.position = Vector3.Lerp(fallbackCamera.transform.position, output, Time.fixedDeltaTime * Main.settings.camera_pos_vel);
-                if (rot) fallbackCamera.transform.rotation = Quaternion.Slerp(fallbackCamera.transform.rotation, rotation, Time.fixedDeltaTime * Main.settings.camera_rot_vel);
+                if (pos) fallbackCamera.transform.position = Vector3.SmoothDamp(fallbackCamera.transform.position, output, ref camera_velocity, Main.settings.camera_pos_vel / 200f);
+                if (rot) fallbackCamera.transform.rotation = Utils.SmoothDampQuaternion(fallbackCamera.transform.rotation, rotation, ref camera_velocity_rotation, Main.settings.camera_rot_vel / 200f);
+                if (golf)
+                {
+                    Vector3 vel = ball.GetComponent<Rigidbody>().velocity;
+                    if (vel.magnitude >= 1f)
+                    {
+                        Quaternion look = Quaternion.LookRotation(vel);
+                        fallbackCamera.transform.rotation = Quaternion.Slerp(fallbackCamera.transform.rotation, look, Time.fixedDeltaTime * Main.settings.camera_rot_vel);
+                    }
+                }
 
                 main_cam.transform.position = fallbackCamera.transform.position;
                 main_cam.transform.rotation = fallbackCamera.transform.rotation;
@@ -1958,21 +1996,25 @@ namespace walking_mod
 
         bool delay_input = false;
         bool kinematic = true;
+        int ground_check = 0;
         void Throwdown()
         {
-            PlayerController.Instance.comController.COMRigidbody.isKinematic = kinematic;
+            PlayerController.Instance.comController.COMRigidbody.MovePosition(PlayerController.Instance.skaterController.skaterRigidbody.position);
+            //PlayerController.Instance.skaterController.skaterRigidbody.MovePosition(PlayerController.Instance.skaterController.skaterRigidbody.position);
+            //PlayerController.Instance.skaterController.skaterRigidbody.velocity = PlayerController.Instance.boardController.boardRigidbody.velocity;
 
-            if (check_velocity && respawn_delay >= 1)
-            {
-                if (PlayerController.Instance.boardController.GroundCheck())
-                {
-                    check_velocity = false;
-                    delay_input = true;
-                    kinematic = false;
-                    PlayerController.Instance.comController.UpdateCOM(.89f, 1);
-                    EventManager.Instance.EnterAir(respawnSwitch ? PopType.Switch : PopType.Ollie);
-                }
-            }
+            PlayerController.Instance.boardController.ResetAll();
+            PlayerController.Instance.skaterController.skaterRigidbody.velocity = PlayerController.Instance.boardController.boardRigidbody.velocity;
+
+            /*PlayerController.Instance.skaterController.animBoardTargetTransform.position = PlayerController.Instance.boardController.boardRigidbody.transform.position;
+            PlayerController.Instance.skaterController.animBoardTargetTransform.rotation = PlayerController.Instance.boardController.boardRigidbody.transform.rotation;
+            PlayerController.Instance.skaterController.skaterTargetTransform.position = PlayerController.Instance.skaterController.animBoardTargetTransform.position;*/
+
+            PlayerController.Instance.comController.COMRigidbody.position = PlayerController.Instance.skaterController.skaterRigidbody.position;
+            PlayerController.Instance.comController.COMRigidbody.velocity = PlayerController.Instance.skaterController.skaterRigidbody.velocity;
+
+            MonoBehaviourSingleton<PlayerController>.Instance.ToggleFlipColliders(false);
+            MonoBehaviourSingleton<PlayerController>.Instance.SetTurnMultiplier(1f);
 
             if (updating && respawn_delay >= 0)
             {
@@ -1995,24 +2037,42 @@ namespace walking_mod
             }
             else respawn_delay = 0;
 
-            Traverse.Create(PlayerController.Instance).Field("_isSwitch").SetValue(respawnSwitch);
+            Vector3 vel = (respawnSwitch ? -PlayerController.Instance.boardController.boardTransform.forward : PlayerController.Instance.boardController.boardTransform.forward) * (2f + (8f * -relativeVelocity.z * Main.settings.throwdown_force));
+            vel.y = PlayerController.Instance.boardController.boardRigidbody.velocity.y;
+            PlayerController.Instance.boardController.boardRigidbody.velocity = vel;
 
-            if (!respawnSwitch) PlayerController.Instance.skaterController.ResetSwitchAnims();
-            else
+            if (check_velocity)
             {
-                Traverse.Create(PlayerController.Instance.skaterController).Field("_animSwitch").SetValue(1f);
-                Traverse.Create(PlayerController.Instance.skaterController).Field("_actualSwitch").SetValue(1f);
-            }
+                if (PlayerController.Instance.IsGrounded() || IsGrinding())
+                {
+                    if (ground_check >= 1)
+                    {
+                        check_velocity = false;
+                        delay_input = true;
+                        PlayerController.Instance.comController.COMRigidbody.isKinematic = false;
+                        PlayerController.Instance.currentStateEnum = PlayerController.CurrentState.Impact;
+                        PlayerController.Instance.ScalePlayerCollider();
+                        PlayerController.Instance.skaterController.InitializeSkateRotation();
+                    }
+                    ground_check++;
+                }
+                else
+                {
+                    if (PlayerController.Instance.currentStateEnum != PlayerController.CurrentState.InAir)
+                    {
+                        EventManager.Instance.EnterAir(respawnSwitch ? PopType.Switch : PopType.Ollie);
+                        PlayerController.Instance.currentStateEnum = PlayerController.CurrentState.InAir;
+                    }
 
-            PlayerController.Instance.boardController.ResetAll();
-            PlayerController.Instance.boardController.boardRigidbody.velocity = (respawnSwitch ? -PlayerController.Instance.PlayerForward() : PlayerController.Instance.PlayerForward()) * (2f + (8f * -relativeVelocity.z * Main.settings.throwdown_force));
-            PlayerController.Instance.comController.COMRigidbody.MovePosition(PlayerController.Instance.skaterController.skaterRigidbody.position);
-            PlayerController.Instance.comController.COMRigidbody.velocity = PlayerController.Instance.boardController.boardRigidbody.velocity;
-            PlayerController.Instance.skaterController.skaterRigidbody.MovePosition(PlayerController.Instance.skaterController.skaterRigidbody.position);
-            PlayerController.Instance.skaterController.skaterRigidbody.velocity = PlayerController.Instance.boardController.boardRigidbody.velocity;
-            PlayerController.Instance.cameraController._camRigidbody.MovePosition(fallbackCamera.transform.position);
-            PlayerController.Instance.cameraController._camRigidbody.MoveRotation(fallbackCamera.transform.rotation);
-            PlayerController.Instance.cameraController._camRigidbody.velocity = PlayerController.Instance.boardController.boardRigidbody.velocity;
+                    MonoBehaviourSingleton<PlayerController>.Instance.SetTurningMode(InputController.TurningMode.InAir);
+                    PlayerController.Instance.ScalePlayerCollider();
+                    PlayerController.Instance.skaterController.InitializeSkateRotation();
+                }
+            }
+        }
+        bool IsGrinding()
+        {
+            return PlayerController.Instance.currentStateEnum == PlayerController.CurrentState.Grinding || PlayerController.Instance.currentStateEnum == PlayerController.CurrentState.EnterCoping || PlayerController.Instance.currentStateEnum == PlayerController.CurrentState.ExitCoping;
         }
 
         void OnJumpEnd()
@@ -2066,6 +2126,23 @@ namespace walking_mod
 
             PlayerController.Instance.respawn.behaviourPuppet.puppetMaster.muscles[6].transform.position = last_hand_l;
             PlayerController.Instance.respawn.behaviourPuppet.puppetMaster.muscles[9].transform.position = last_hand_r;
+
+            PlayerController.Instance.cameraController._camRigidbody.MovePosition(fallbackCamera.transform.position);
+            PlayerController.Instance.cameraController._camRigidbody.MoveRotation(fallbackCamera.transform.rotation);
+            //PlayerController.Instance.cameraController._camRigidbody.velocity = PlayerController.Instance.boardController.boardRigidbody.velocity;
+
+            EventManager.Instance.OnCatched(true, true);
+            PlayerController.Instance.boardController.boardRigidbody.velocity = (respawnSwitch ? -PlayerController.Instance.boardController.boardTransform.forward : PlayerController.Instance.boardController.boardTransform.forward) * (2f + (8f * -relativeVelocity.z * Main.settings.throwdown_force));
+
+            Traverse.Create(PlayerController.Instance).Field("_isSwitch").SetValue(respawnSwitch);
+
+
+            if (!respawnSwitch) PlayerController.Instance.skaterController.ResetSwitchAnims();
+            else
+            {
+                Traverse.Create(PlayerController.Instance.skaterController).Field("_animSwitch").SetValue(1f);
+                Traverse.Create(PlayerController.Instance.skaterController).Field("_actualSwitch").SetValue(1f);
+            }
         }
 
         void OnImpactEnd()
@@ -2080,13 +2157,13 @@ namespace walking_mod
 
         void UpdateGameplay()
         {
+            if (inState) PinMovementController.SetStartTransform(fs.self.transform.position, fallbackCamera.transform.rotation);
             try
             {
                 PlayerController.Instance.skaterController.skaterTransform.position = fs.self.transform.position;
-                PlayerController.Instance.skaterController.skaterTransform.rotation = fs.self.transform.rotation;
+                PlayerController.Instance.skaterController.skaterTransform.rotation = Quaternion.Euler(PlayerController.Instance.skaterController.skaterTransform.rotation.eulerAngles.x, fs.self.transform.rotation.eulerAngles.y, PlayerController.Instance.skaterController.skaterTransform.rotation.eulerAngles.z);
                 PlayerController.Instance.boardController.boardTransform.position = fakeSkate.transform.position;
                 PlayerController.Instance.boardController.boardTransform.rotation = fakeSkate.transform.rotation;
-                PinMovementController.SetStartTransform(new Vector3(PlayerController.Instance.skaterController.skaterTransform.position.x, PlayerController.Instance.skaterController.skaterTransform.position.y + fs.collider.height, PlayerController.Instance.skaterController.skaterTransform.position.z), fallbackCamera.transform.rotation);
             }
             catch { }
         }
@@ -2376,7 +2453,7 @@ namespace walking_mod
             PlayerController.Instance.respawn.puppetMaster.mode = PuppetMaster.Mode.Kinematic;
             PlayerController.Instance.ikController._finalIk.enabled = false;
             PlayerController.Instance.respawn.puppetMaster.targetRoot.position = respawnInfos.position + respawnInfos.rotation * PlayerController.Instance.respawn.GetOffsetPositions(respawnInfos.isSwitch)[0];
-            PlayerController.Instance.respawn.puppetMaster.targetRoot.rotation = respawnInfos.playerRotation;
+            PlayerController.Instance.respawn.puppetMaster.targetRoot.rotation = respawnInfos.rotation;
             PlayerController.Instance.respawn.puppetMaster.angularLimits = false;
             PlayerController.Instance.respawn.puppetMaster.state = PuppetMaster.State.Alive;
             PlayerController.Instance.respawn.puppetMaster.Teleport(respawnInfos.position + respawnInfos.rotation * PlayerController.Instance.respawn.GetOffsetPositions(respawnInfos.isSwitch)[1] + new Vector3(0f, 1f, 0f), respawnInfos.playerRotation, false);
@@ -2387,7 +2464,7 @@ namespace walking_mod
                 PlayerController.Instance.respawn.getSpawn[j].position = position;
                 PlayerController.Instance.respawn.getSpawn[j].rotation = rotation;
             }
-            PlayerController.Instance.skaterController.skaterRigidbody.rotation = PlayerController.Instance.respawn.behaviourPuppet.puppetMaster.transform.rotation;
+            PlayerController.Instance.skaterController.skaterRigidbody.rotation = respawnInfos.rotation;
             PlayerController.Instance.skaterController.skaterTransform.position = PlayerController.Instance.boardController.boardTransform.position;
             PlayerController.Instance.ResetIKOffsets();
             PlayerController.Instance.cameraController.ResetAllCamera();
@@ -2402,9 +2479,7 @@ namespace walking_mod
             PlayerController.Instance.SetBoardToMaster();
             PlayerController.Instance.SetTurningMode(InputController.TurningMode.Grounded);
             PlayerController.Instance.ResetAllAnimations();
-            PlayerController.Instance.boardController.firstVel = 0f;
-            PlayerController.Instance.boardController.secondVel = 0f;
-            PlayerController.Instance.boardController.thirdVel = 0f;
+            PlayerController.Instance.boardController.ResetAll();
             PlayerController.Instance.SetLeftIKLerpTarget(0f);
             PlayerController.Instance.SetRightIKLerpTarget(0f);
             PlayerController.Instance.SetMaxSteeze(0f);
@@ -2425,6 +2500,30 @@ namespace walking_mod
             MonoBehaviourSingleton<PlayerController>.Instance.SetRightIKLerpTarget(0f);
             MonoBehaviourSingleton<PlayerController>.Instance.SetRightIKWeight(1f);
             MonoBehaviourSingleton<PlayerController>.Instance.SetLeftIKWeight(1f);
+            GrindPart();
+
+            MonoBehaviourSingleton<PlayerController>.Instance.RagdollLayerChange(false);
+            MonoBehaviourSingleton<PlayerController>.Instance.respawn.puppetMaster.pinWeight = 1f;
+            MonoBehaviourSingleton<PlayerController>.Instance.respawn.puppetMaster.muscleWeight = 1f;
+            MonoBehaviourSingleton<PlayerController>.Instance.respawn.behaviourPuppet.defaults.minMappingWeight = 0f;
+            MonoBehaviourSingleton<PlayerController>.Instance.respawn.behaviourPuppet.masterProps.normalMode = BehaviourPuppet.NormalMode.Unmapped;
+            MonoBehaviourSingleton<PlayerController>.Instance.SetBoardPhysicsMaterial(PlayerController.FrictionType.Default);
+            MonoBehaviourSingleton<PlayerController>.Instance.cameraController.enabled = true;
+            MonoBehaviourSingleton<PlayerController>.Instance.EnablePuppetMaster(true, false);
+
+            main_cam.transform.position = fallbackCamera.transform.position;
+            main_cam.transform.rotation = fallbackCamera.transform.rotation;
+
+            PlayerController.Instance.DisableArmPhysics();
+            PlayerController.Instance.CancelRespawnInvoke();
+
+            Time.timeScale = 1f;
+
+            //EnterRiding();
+        }
+
+        void GrindPart()
+        {
             MonoBehaviourSingleton<PlayerController>.Instance.cameraController.IsInGrindState = false;
             MonoBehaviourSingleton<PlayerController>.Instance.cameraController.IsInCopingState = false;
             MonoBehaviourSingleton<PlayerController>.Instance.cameraController.NeedToSlowLerpCamera = false;
@@ -2444,26 +2543,6 @@ namespace walking_mod
             MonoBehaviourSingleton<PlayerController>.Instance.ResetFrontTruckCenterOfMass();
             MonoBehaviourSingleton<SoundManager>.Instance.StopPowerslideSound(1, Vector3.ProjectOnPlane(MonoBehaviourSingleton<PlayerController>.Instance.boardController.boardRigidbody.velocity, Vector3.up).magnitude);
             EventManager.Instance.ExitGrind();
-
-            MonoBehaviourSingleton<PlayerController>.Instance.RagdollLayerChange(false);
-            MonoBehaviourSingleton<PlayerController>.Instance.respawn.puppetMaster.pinWeight = 1f;
-            MonoBehaviourSingleton<PlayerController>.Instance.respawn.puppetMaster.muscleWeight = 1f;
-            MonoBehaviourSingleton<PlayerController>.Instance.respawn.behaviourPuppet.defaults.minMappingWeight = 0f;
-            MonoBehaviourSingleton<PlayerController>.Instance.respawn.behaviourPuppet.masterProps.normalMode = BehaviourPuppet.NormalMode.Unmapped;
-            MonoBehaviourSingleton<PlayerController>.Instance.SetBoardPhysicsMaterial(PlayerController.FrictionType.Default);
-            MonoBehaviourSingleton<PlayerController>.Instance.cameraController.enabled = true;
-            MonoBehaviourSingleton<PlayerController>.Instance.EnablePuppetMaster(true, false);
-
-            main_cam.transform.position = fallbackCamera.transform.position;
-            main_cam.transform.rotation = fallbackCamera.transform.rotation;
-
-            PlayerController.Instance.DisableArmPhysics();
-
-            PlayerController.Instance.CancelRespawnInvoke();
-
-            Time.timeScale = 1f;
-
-            EnterRiding();
         }
 
         void EnterRiding()
@@ -2490,6 +2569,7 @@ namespace walking_mod
             Traverse.Create(PlayerController.Instance.skaterController).Field("skaterVelocities").SetValue(skaterVelocities);
             Traverse.Create(PlayerController.Instance.skaterController).Field("lastSkaterPos").SetValue(PlayerController.Instance.skaterController.skaterTransform.position);
 
+            return;
 
             Vector3[] skateVelocities = (Vector3[])Traverse.Create(PlayerController.Instance.boardController).Field("boardVelocites").GetValue();
 
@@ -2499,6 +2579,18 @@ namespace walking_mod
             }
 
             Traverse.Create(PlayerController.Instance.boardController).Field("boardVelocites").SetValue(skateVelocities);
+        }
+
+        bool golf = false;
+        GameObject ball;
+        public void Golf()
+        {
+            ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            ball.transform.localScale = new Vector3(.05f, .05f, .05f);
+            ball.AddComponent<Rigidbody>();
+            ball.AddComponent<GolfController>();
+            ball.transform.position = fs.self.transform.position + new Vector3(0, 0, 1f);
+            golf = true;
         }
     }
 }
