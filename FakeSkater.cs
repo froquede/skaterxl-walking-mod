@@ -21,11 +21,12 @@ namespace walking_mod
         public Rigidbody rb;
         public CapsuleCollider collider;
 
-        public void Create()
+        public void Create(Vector3 pos)
         {
             if (PlayerController.Instance.skaterController.skaterTransform.gameObject != null)
             {
                 self = Instantiate(PlayerController.Instance.skaterController.skaterTransform.gameObject);
+                self.transform.position = pos;
                 self.name = "FakeSkater";
 
                 Destroy(self.GetComponent<Animator>());
@@ -63,8 +64,8 @@ namespace walking_mod
                 collider = self.AddComponent<CapsuleCollider>();
                 collider.height = 1.4404f;
                 collider.radius = .2f;
-                collider.material.dynamicFriction = .3f;
-                collider.material.staticFriction = .6f;
+                collider.material.dynamicFriction = .8f;
+                collider.material.staticFriction = 3f;
                 collider.material.bounciness = 1f;
 
                 cache = new Dictionary<string, Transform>();

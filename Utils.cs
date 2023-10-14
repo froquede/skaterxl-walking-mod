@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityModManagerNet;
 
 namespace walking_mod
 {
@@ -82,6 +83,44 @@ namespace walking_mod
                 return new Quaternion(-curr.x, -curr.y, -curr.z, -curr.w);
             }
             return curr;
+        }
+
+        public static string[] hands_parts = new string[] {
+            "Skater_index_01_l",
+            "Skater_index_02_l",
+            "Skater_index_03_l",
+            "Skater_middle_01_l",
+            "Skater_middle_02_l",
+            "Skater_middle_03_l",
+            "Skater_pinky_01_l",
+            "Skater_pinky_02_l",
+            "Skater_pinky_03_l",
+            "Skater_ring_01_l",
+            "Skater_ring_02_l",
+            "Skater_ring_03_l",
+            "Skater_thumb_01_l",
+            "Skater_thumb_02_l",
+            "Skater_thumb_03_l",
+            "Skater_index_01_r",
+            "Skater_index_02_r",
+            "Skater_index_03_r",
+            "Skater_middle_01_r",
+            "Skater_middle_02_r",
+            "Skater_middle_03_r",
+            "Skater_pinky_01_r",
+            "Skater_pinky_02_r",
+            "Skater_pinky_03_r",
+            "Skater_ring_01_r",
+            "Skater_ring_02_r",
+            "Skater_ring_03_r",
+            "Skater_thumb_01_r",
+            "Skater_thumb_02_r",
+            "Skater_thumb_03_r"
+        };
+
+        public static void Log(object log)
+        {
+            UnityModManager.Logger.Log("[walking-mod] " + log.ToString());
         }
     }
 }

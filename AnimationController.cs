@@ -32,6 +32,8 @@ namespace walking_mod
         Vector3 first_frame_pelvis;
         public bool anchorRootFade = true;
         public float anchorRootSpeed = 12f;
+        public bool skate_animation = false;
+        public int mag_start = -1, mag_end = -1;
 
         public AnimController(AnimController origin)
         {
@@ -55,6 +57,7 @@ namespace walking_mod
             anchorRootFade = origin.anchorRootFade;
             anchorRootSpeed = origin.anchorRootSpeed;
             offsetPelvis = origin.offsetPelvis;
+            skate_animation = origin.skate_animation;
         }
 
         public AnimController()
@@ -156,6 +159,24 @@ namespace walking_mod
                 }
             }
 
+            if (json_parsed["skate_animation"] != null)
+            {
+                if ((bool)json_parsed["skate_animation"])
+                {
+                    string part = "Skate";
+                    try
+                    {
+                        Type type = typeof(AnimationJSONParts);
+                        var property = type.GetProperty(part);
+                        AnimationJSONPart new_part = new AnimationJSONPart(JsonConvert.DeserializeObject<float[][]>(json_parsed["parts"][part]["position"].ToString()), JsonConvert.DeserializeObject<float[][]>(json_parsed["parts"][part]["quaternion"].ToString()));
+                        property.SetValue(parts, new_part);
+                        skate_animation = true;
+                        mag_start = (int)json_parsed["mag_start"];
+                        mag_end = (int)json_parsed["mag_end"];
+                    } catch { }
+                }
+            }
+
             try { anchorRoot = json_parsed["anchorRoot"] == null ? anchorRoot : (bool)json_parsed["anchorRoot"]; }
             catch { }
 
@@ -163,7 +184,7 @@ namespace walking_mod
             catch { }
 
             animation = new AnimationJSON((float)json_parsed["duration"], Newtonsoft.Json.JsonConvert.DeserializeObject<float[]>(json_parsed["times"].ToString()), parts);
-            UnityModManager.Logger.Log("[walking-mod] Loaded animation: " + animation.ToString() + " " + name);
+            Utils.Log("[walking-mod] Loaded animation: " + animation.ToString() + " " + name);
 
             Type type_pelvis = typeof(AnimationJSONParts);
             var prop_pelvis = type_pelvis.GetProperty("Skater_pelvis");
@@ -192,11 +213,11 @@ namespace walking_mod
 
                 if (Main.walking_go.last_animation == null) Main.walking_go.last_animation = new AnimController(this);
 
-                int d_crossfade = (Main.walking_go.last_animation.name != name && doCrossfade) ? 14 : doCrossfade ? crossfade : 0;
-                if (Time.fixedUnscaledTime - Main.walking_go.enterBailTimestamp <= .14f && Main.walking_go.enterFromBail)
+                int d_crossfade = (Main.walking_go.last_animation.name != name && doCrossfade) ? 9 : doCrossfade ? crossfade : 0;
+                if (Time.fixedUnscaledTime - Main.walking_go.enterBailTimestamp <= Time.deltaTime * 2f && Main.walking_go.enterFromBail)
                 {
                     interpolateActual = true;
-                    d_crossfade = (int)(.14f / Time.fixedDeltaTime);
+                    d_crossfade = 12;
                 }
 
                 float step = 0;
@@ -228,8 +249,7 @@ namespace walking_mod
                     float x = -(pelvis.position[index][0] - pelvis.position[0][0]);
                     float y = -(pelvis.position[index][1] - pelvis.position[0][1]);
                     float z = -(pelvis.position[index][2] - pelvis.position[0][2]);
-                    if (anchorRootFade) offset = Vector3.Lerp(offset, new Vector3(x, -(fs.collider.height / 2) + y, z), Time.fixedDeltaTime * 12f);
-                    else offset = new Vector3(x, -(fs.collider.height / 2) + y, z);
+                    offset = Vector3.Lerp(offset, new Vector3(x, -(fs.collider.height / 2) + y, z), !anchorRootFade ? 1f : Time.deltaTime * 24f);
                 }
 
                 foreach (string part in fs.bones)
@@ -243,10 +263,12 @@ namespace walking_mod
                             var property = type.GetProperty(part);
                             AnimationJSONPart apart = (AnimationJSONPart)property.GetValue(animation.parts, null);
                             AnimationJSONPart iapart = (AnimationJSONPart)property.GetValue(i_animation.parts, null);
+                            float[] times = animation.times;
+                            float[] itimes = i_animation.times;
 
-                            float i_time = i_animation.times.Length - 1 >= interpolation_index ? i_animation.times[interpolation_index] : i_animation.times[0];
+                            float i_time = itimes.Length - 1 >= interpolation_index ? itimes[interpolation_index] : itimes[0];
 
-                            float istep = animation.times[index] - i_time;
+                            float istep = times[index] - i_time;
                             float diff = animTime - i_time;
                             step = 1 - ((istep - diff) / istep);
 
@@ -267,21 +289,24 @@ namespace walking_mod
                             Quaternion i_rotation = rotation * new Quaternion(iapart.quaternion[interpolation_index][0], iapart.quaternion[interpolation_index][1], iapart.quaternion[interpolation_index][2], iapart.quaternion[interpolation_index][3]);
                             rotation = rotation * new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]);
 
-                            if (interpolateActual)
-                            {
-                                i_target_pos = tpart.position;
-                                i_rotation = tpart.rotation;
-                                step = Time.fixedDeltaTime * 24f;
-                            }
 
-                            if (animation.times.Length > 1)
+                            if (times.Length > 1)
                             {
                                 bool valid = isValidMatrix(i_target_pos, i_rotation);
+                                Vector3 target_i = valid ? i_target_pos : tpart.position;
 
-                                tpart.position = Vector3.Slerp(valid ? i_target_pos : tpart.position, target_pos, step);
-                                tpart.rotation = Quaternion.Slerp(valid ? i_rotation : tpart.rotation, rotation, step);
+                                if (interpolateActual)
+                                {
+                                    i_target_pos = tpart.position;
+                                    i_rotation = tpart.rotation;
+                                    float d = Vector3.Distance(target_i, target_pos) * 60f;
+                                    step = Time.deltaTime * d;
+                                }
 
-                                if(!valid) { UnityModManager.Logger.Log(step + " " + index + " " + interpolation_index + " " + i_animation.times.Length); }
+                                tpart.position = Vector3.Lerp(target_i, target_pos, step);
+                                tpart.rotation = Quaternion.Lerp(valid ? i_rotation : tpart.rotation, rotation, step);
+
+                                if(!valid) { Utils.Log(step + " " + index + " " + interpolation_index + " " + itimes.Length); }
                             }
                             else
                             {
@@ -291,12 +316,49 @@ namespace walking_mod
                         }
                         catch (Exception e)
                         {
-                            UnityModManager.Logger.Log("Error playing frame " + e.Message + " " + index + " " + interpolation_index);
+                            Utils.Log("Error playing frame " + e.Message + " " + index + " " + interpolation_index);
                         }
                     }
                 }
 
-                if (count >= d_crossfade) animTime += Time.fixedDeltaTime * speed;
+                if (skate_animation)
+                {
+                    string part = "Skate";
+                    Type type = typeof(AnimationJSONParts);
+                    var property = type.GetProperty(part);
+                    AnimationJSONPart apart = (AnimationJSONPart)property.GetValue(animation.parts, null);
+                    Vector3 anim_position = new Vector3(apart.position[index][0], apart.position[index][1], apart.position[index][2]);
+                    Quaternion anim_rotation = rotation_offset * fs.self.transform.rotation;
+                    anim_rotation = anim_rotation * new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]);
+
+                    Vector3 position = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
+                    Vector3 target_pos = TranslateWithRotation(position, anim_position, fs.self.transform.rotation);
+
+                    float skate_step = Time.deltaTime * 48f;
+
+                    target_pos = Vector3.Lerp(Main.walking_go.fakeSkate.transform.position, target_pos, skate_step);
+                    anim_rotation = Quaternion.Lerp(Main.walking_go.fakeSkate.transform.rotation, anim_rotation * Quaternion.Euler(90f, 0, 0), skate_step);
+
+                    if (mag_start >= 0 || mag_end >= 0)
+                    {
+                        float time_start = animation.times[mag_start];
+                        float time_end = animation.times[mag_end];
+                        Main.walking_go.magnetized = animTime >= time_start && animTime <= time_end;
+                        if(Main.walking_go.magnetized)
+                        {
+                            Main.walking_go.fakeSkate.transform.position = target_pos;
+                            Main.walking_go.fakeSkate.transform.rotation = anim_rotation;
+                        }
+                    }
+                    else
+                    {
+                        Main.walking_go.magnetized = true;
+                        Main.walking_go.fakeSkate.transform.position = target_pos;
+                        Main.walking_go.fakeSkate.transform.rotation = anim_rotation;
+                    }                    
+                }
+
+                if (count >= d_crossfade) animTime += Time.deltaTime * speed;
 
                 count++;
 
@@ -327,31 +389,31 @@ namespace walking_mod
         {
             if (position == null || rotation == null)
             {
-                UnityModManager.Logger.Log("Transform is null.");
+                Utils.Log("Transform is null.");
                 return false;
             }
 
             if (float.IsInfinity(position.x) || float.IsInfinity(position.y) || float.IsInfinity(position.z))
             {
-                UnityModManager.Logger.Log("Transform position has infinity value(s).");
+                Utils.Log("Transform position has infinity value(s).");
                 return false;
             }
 
             if (float.IsNaN(position.x) || float.IsNaN(position.y) || float.IsNaN(position.z))
             {
-                UnityModManager.Logger.Log("Transform position has NaN value(s).");
+                Utils.Log("Transform position has NaN value(s).");
                 return false;
             }
 
             if (float.IsInfinity(rotation.x) || float.IsInfinity(rotation.y) || float.IsInfinity(rotation.z) || float.IsInfinity(rotation.w))
             {
-                UnityModManager.Logger.Log("Transform rotation has infinity value(s).");
+                Utils.Log("Transform rotation has infinity value(s).");
                 return false;
             }
 
             if (float.IsNaN(rotation.x) || float.IsNaN(rotation.y) || float.IsNaN(rotation.z) || float.IsNaN(rotation.w))
             {
-                UnityModManager.Logger.Log("Transform rotation has NaN value(s).");
+                Utils.Log("Transform rotation has NaN value(s).");
                 return false;
             }
 

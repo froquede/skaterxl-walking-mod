@@ -190,7 +190,7 @@ namespace walking_mod
                 }
                 catch
                 {
-                    UnityModManager.Logger.Log("Error ui " + (Main.walking_go.emote3 == null));
+                    Utils.Log("Error ui " + (Main.walking_go.emote3 == null));
                 }
 
                 if (show_change_btn) GUI.DrawTexture(new Rect(36 + (Screen.width / 60), (Screen.height / 2) + (circularTexture.height / 2) + 12, change_emote_btn.width, change_emote_btn.height), change_emote_btn);
@@ -207,7 +207,7 @@ namespace walking_mod
                 }
                 catch
                 {
-                    UnityModManager.Logger.Log("Error ui " + (Main.walking_go.emote3 == null));
+                    Utils.Log("Error ui " + (Main.walking_go.emote3 == null));
                 }
 
                 if (show_change_btn) GUI.DrawTexture(new Rect(36 + (Screen.width / 60), (Screen.height / 2) + (circularTexture.height / 2) + 12, change_emote_btn.width, change_emote_btn.height), change_emote_btn);

@@ -23,7 +23,7 @@ namespace walking_mod
         {
             if(collider.gameObject.name != "FakeSkater")
             {
-                UnityModManager.Logger.Log(collider.gameObject.name);
+                Utils.Log(collider.gameObject.name);
                 SplineComputer spline = collider.gameObject.GetComponent<SplineComputer>();
                 if (spline == null) spline = collider.gameObject.GetComponentInParent<SplineComputer>();
                 if (spline != null) Main.walking_go.doGrind(spline);

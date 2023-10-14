@@ -20,6 +20,7 @@ namespace walking_mod
 
         static bool Load(UnityModManager.ModEntry modEntry)
         {
+            Time.timeScale = 0f;
             harmonyInstance = new Harmony(modEntry.Info.Id);
 
             go = new GameObject("WalkingModGameObject");
@@ -38,10 +39,11 @@ namespace walking_mod
             settings = UnityModManager.ModSettings.Load<Settings>(modEntry);
             settings.temprot = settings.camera_rotation_offset.eulerAngles;
 
-            UnityModManager.Logger.Log("Loaded " + modEntry.Info.Id);
+            Utils.Log("Loaded " + modEntry.Info.Id);
             UnityEngine.Object.DontDestroyOnLoad(go);
             UnityEngine.Object.DontDestroyOnLoad(walking_go);
             UnityEngine.Object.DontDestroyOnLoad(ui);
+
             return true;
         }
         static bool Unload(UnityModManager.ModEntry modEntry)
@@ -62,7 +64,7 @@ namespace walking_mod
 
         private static bool OnToggle(UnityModManager.ModEntry modEntry, bool value)
         {
-            UnityModManager.Logger.Log("Toggled " + modEntry.Info.Id);
+            Utils.Log("Toggled " + modEntry.Info.Id);
             return true;
         }
 
