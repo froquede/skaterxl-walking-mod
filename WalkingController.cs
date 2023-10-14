@@ -1591,7 +1591,7 @@ namespace walking_mod
         void EnterWalkMode(bool bailmode, bool _magnetized = true)
         {
             if (respawning || busy) return;
-            //if (MultiplayerManager.Instance.InRoom && bailmode) return;
+            if (MultiplayerManager.Instance.InRoom && bailmode) return;
 
             spawning = true;
 
