@@ -28,12 +28,15 @@ namespace walking_mod
         public float timeLimit = 0f, timeLimitStart = 0f;
 
         float animTime = 0f;
-        public int frame = 0, last_frame = 0, count = 0, crossfade = 0;
+        public int frame = 0, last_frame = 0, crossfade = 0;
+        public float count = 0;
         Vector3 first_frame_pelvis;
         public bool anchorRootFade = true;
         public float anchorRootSpeed = 12f;
         public bool skate_animation = false;
         public int mag_start = -1, mag_end = -1;
+        // forced closed hands, the hand holding the board closes on its own
+        public bool right_hand_closed = false, left_hand_closed = false;
 
         public AnimController(AnimController origin)
         {
@@ -58,6 +61,8 @@ namespace walking_mod
             anchorRootSpeed = origin.anchorRootSpeed;
             offsetPelvis = origin.offsetPelvis;
             skate_animation = origin.skate_animation;
+            right_hand_closed = origin.right_hand_closed;
+            left_hand_closed = origin.left_hand_closed;
         }
 
         public AnimController()
@@ -132,8 +137,10 @@ namespace walking_mod
             string json;
             if (File.Exists(path))
             {
-                var reader = File.OpenText(path);
-                json = await reader.ReadToEndAsync();
+                using (var reader = File.OpenText(path))
+                {
+                    json = await reader.ReadToEndAsync();
+                }
             }
             else
             {
@@ -184,157 +191,125 @@ namespace walking_mod
             catch { }
 
             animation = new AnimationJSON((float)json_parsed["duration"], Newtonsoft.Json.JsonConvert.DeserializeObject<float[]>(json_parsed["times"].ToString()), parts);
-            Utils.Log("[walking-mod] Loaded animation: " + animation.ToString() + " " + name);
+            animation.ResolveBones(fs.bones);
+            Utils.Log("Loaded animation: " + animation.ToString() + " " + name);
 
-            Type type_pelvis = typeof(AnimationJSONParts);
-            var prop_pelvis = type_pelvis.GetProperty("Skater_pelvis");
-            AnimationJSONPart pelvis = (AnimationJSONPart)prop_pelvis.GetValue(animation.parts, null);
+            AnimationJSONPart pelvis = animation.parts.Skater_pelvis;
             first_frame_pelvis = new Vector3(pelvis.position[0][0], pelvis.position[0][1], pelvis.position[0][2]);
 
             if (timeLimit == 0f) timeLimit = animation.duration;
             if (timeLimitStart == 0f) timeLimitStart = animation.times[0];
         }
 
-        float stiffness = 200f, damping = 40f;
-        Dictionary<string, Vector3> velocity = new Dictionary<string, Vector3>();
         public void Update()
         {
-            if (fs.self && isPlaying)
+            if (fs.self && isPlaying && animation != null && animation.boneParts != null)
             {
+                float frameScale = Utils.FrameScale();
                 bool interpolateActual = false;
-
-                int index = 0;
-
-                for (int i = 0; i < animation.times.Length; i++)
-                {
-                    index = i;
-                    if (animation.times[i] >= animTime) break;
-                }
+                float[] times = animation.times;
+                int last = times.Length - 1;
 
                 if (Main.walking_go.last_animation == null) Main.walking_go.last_animation = new AnimController(this);
 
+                // crossfade lengths are in 60 fps frames
                 int d_crossfade = (Main.walking_go.last_animation.name != name && doCrossfade) ? 9 : doCrossfade ? crossfade : 0;
-                if (Time.fixedUnscaledTime - Main.walking_go.enterBailTimestamp <= Time.deltaTime * 2f && Main.walking_go.enterFromBail)
+                if (Time.unscaledTime - Main.walking_go.enterBailTimestamp <= Time.deltaTime * 2f && Main.walking_go.enterFromBail)
                 {
                     interpolateActual = true;
                     d_crossfade = 12;
                 }
+                bool crossfading = count < d_crossfade;
 
-                float step = 0;
+                // keyframes around animTime, sampled by time so the pose doesn't depend on the frame rate
+                int a, b;
+                float t;
+                SampleKeys(times, out a, out b, out t);
 
-                if (count < d_crossfade) index = 0;
-                last_frame = index;
-                frame = index;
-
-                int interpolation_index = index - 1;
-
-                if (animation.times.Length == 1)
+                AnimationJSONPart pelvis = animation.parts.Skater_pelvis;
+                if (anchorRoot && pelvis != null)
                 {
-                    frame = index = interpolation_index = 0;
+                    Vector3 pelvis_pos = Vector3.Lerp(pelvis.positions[a], pelvis.positions[b], t);
+                    Vector3 delta = -(pelvis_pos - pelvis.positions[0]);
+                    Vector3 target_offset = new Vector3(delta.x, -(fs.collider.height / 2) + delta.y, delta.z);
+                    offset = !anchorRootFade ? target_offset : Vector3.Lerp(offset, target_offset, Utils.FrameIndependentLerp((1f / 60f) * 24f));
                 }
 
-                if (interpolation_index < 0) interpolation_index = animation.times.Length - 1;
-                AnimationJSON i_animation = animation;
-                if (count < d_crossfade)
-                {
-                    interpolation_index = Main.walking_go.last_animation.last_frame;
-                    i_animation = Main.walking_go.last_animation.animation;
-                }
+                // crossfade source: the previous animation's last shown key, or the current pose if there's none
+                AnimController source = Main.walking_go.last_animation;
+                AnimationJSON source_anim = crossfading && source != null ? source.animation : null;
+                int source_key = 0;
+                if (source_anim != null && source_anim.boneParts != null) source_key = Mathf.Clamp(source.last_frame, 0, source_anim.times.Length - 1);
+                else source_anim = null;
 
-                Type type_pelvis = typeof(AnimationJSONParts);
-                var prop_pelvis = type_pelvis.GetProperty("Skater_pelvis");
-                AnimationJSONPart pelvis = (AnimationJSONPart)prop_pelvis.GetValue(animation.parts, null);
-                if (anchorRoot)
-                {
-                    float x = -(pelvis.position[index][0] - pelvis.position[0][0]);
-                    float y = -(pelvis.position[index][1] - pelvis.position[0][1]);
-                    float z = -(pelvis.position[index][2] - pelvis.position[0][2]);
-                    offset = Vector3.Lerp(offset, new Vector3(x, -(fs.collider.height / 2) + y, z), !anchorRootFade ? 1f : Time.deltaTime * 24f);
-                }
+                float blend = d_crossfade > 0 ? Mathf.Clamp01((count + frameScale) / d_crossfade) : 1f;
 
-                foreach (string part in fs.bones)
+                Quaternion baseRotation = rotation_offset * fs.self.transform.rotation;
+                Vector3 basePosition = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
+
+                bool holdingBoard = Main.walking_go.magnetized && !skate_animation;
+                bool closeLeft = left_hand_closed || (holdingBoard && Main.settings.left_arm);
+                bool closeRight = right_hand_closed || (holdingBoard && !Main.settings.left_arm);
+
+                for (int i = 0; i < fs.bones.Length; i++)
                 {
-                    Transform tpart = fs.getPart(part);
-                    if (tpart)
+                    Transform tpart = fs.getBone(i);
+                    AnimationJSONPart apart = animation.boneParts[i];
+                    if (!tpart || apart == null) continue;
+
+                    try
                     {
-                        try
+                        Vector3 target_pos = TranslateWithRotation(basePosition, Vector3.Lerp(apart.positions[a], apart.positions[b], t), baseRotation);
+                        Quaternion target_rot = baseRotation * Quaternion.Slerp(apart.rotations[a], apart.rotations[b], t);
+                        if (!isValidMatrix(target_pos, target_rot)) continue;
+
+                        if (interpolateActual)
                         {
-                            Type type = typeof(AnimationJSONParts);
-                            var property = type.GetProperty(part);
-                            AnimationJSONPart apart = (AnimationJSONPart)property.GetValue(animation.parts, null);
-                            AnimationJSONPart iapart = (AnimationJSONPart)property.GetValue(i_animation.parts, null);
-                            float[] times = animation.times;
-                            float[] itimes = i_animation.times;
-
-                            float i_time = itimes.Length - 1 >= interpolation_index ? itimes[interpolation_index] : itimes[0];
-
-                            float istep = times[index] - i_time;
-                            float diff = animTime - i_time;
-                            step = 1 - ((istep - diff) / istep);
-
-                            if (count < d_crossfade && Main.walking_go.last_animation.name != name)
-                            {
-                                step = ((float)count + 1f) / (float)d_crossfade;
-                            }
-
-                            Vector3 anim_position = new Vector3(apart.position[index][0], apart.position[index][1], apart.position[index][2]);
-                            Vector3 i_anim_position = new Vector3(iapart.position[interpolation_index][0], iapart.position[interpolation_index][1], iapart.position[interpolation_index][2]);
-
-                            Quaternion rotation = rotation_offset * fs.self.transform.rotation;
-                            Vector3 position = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
-
-                            Vector3 target_pos = TranslateWithRotation(position, anim_position, rotation);
-                            Vector3 i_target_pos = TranslateWithRotation(position, i_anim_position, rotation);
-
-                            Quaternion i_rotation = rotation * new Quaternion(iapart.quaternion[interpolation_index][0], iapart.quaternion[interpolation_index][1], iapart.quaternion[interpolation_index][2], iapart.quaternion[interpolation_index][3]);
-                            rotation = rotation * new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]);
-
-
-                            if (times.Length > 1)
-                            {
-                                bool valid = isValidMatrix(i_target_pos, i_rotation);
-                                Vector3 target_i = valid ? i_target_pos : tpart.position;
-
-                                if (interpolateActual)
-                                {
-                                    i_target_pos = tpart.position;
-                                    i_rotation = tpart.rotation;
-                                    float d = Vector3.Distance(target_i, target_pos) * 60f;
-                                    step = Time.deltaTime * d;
-                                }
-
-                                tpart.position = Vector3.Lerp(target_i, target_pos, step);
-                                tpart.rotation = Quaternion.Lerp(valid ? i_rotation : tpart.rotation, rotation, step);
-
-                                if(!valid) { Utils.Log(step + " " + index + " " + interpolation_index + " " + itimes.Length); }
-                            }
-                            else
-                            {
-                                tpart.position = target_pos;
-                                tpart.rotation = rotation;
-                            }
+                            float step = Mathf.Clamp01(Time.deltaTime * Vector3.Distance(tpart.position, target_pos) * 60f);
+                            tpart.position = Vector3.Lerp(tpart.position, target_pos, step);
+                            tpart.rotation = Quaternion.Slerp(tpart.rotation, target_rot, step);
                         }
-                        catch (Exception e)
+                        else if (crossfading && blend < 1f)
                         {
-                            Utils.Log("Error playing frame " + e.Message + " " + index + " " + interpolation_index);
+                            Vector3 from_pos = tpart.position;
+                            Quaternion from_rot = tpart.rotation;
+                            AnimationJSONPart spart = source_anim != null ? source_anim.boneParts[i] : null;
+                            if (spart != null && source_key < spart.positions.Length && source_key < spart.rotations.Length)
+                            {
+                                from_pos = TranslateWithRotation(basePosition, spart.positions[source_key], baseRotation);
+                                from_rot = baseRotation * spart.rotations[source_key];
+                            }
+
+                            tpart.position = Vector3.Lerp(from_pos, target_pos, blend);
+                            tpart.rotation = Quaternion.Slerp(from_rot, target_rot, blend);
                         }
+                        else
+                        {
+                            tpart.position = target_pos;
+                            tpart.rotation = target_rot;
+                        }
+
+                        // close the fingers of the hand holding the board
+                        if ((closeLeft && fs.left_hand_set.Contains(fs.bones[i])) || (closeRight && fs.right_hand_set.Contains(fs.bones[i])))
+                        {
+                            tpart.rotation = tpart.parent.rotation * Quaternion.Euler(0, 30f, 0f);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Utils.Log("Error playing frame " + e.Message + " " + a + " " + b);
                     }
                 }
 
-                if (skate_animation)
+                AnimationJSONPart skate = skate_animation ? animation.parts.Skate : null;
+                if (skate != null)
                 {
-                    string part = "Skate";
-                    Type type = typeof(AnimationJSONParts);
-                    var property = type.GetProperty(part);
-                    AnimationJSONPart apart = (AnimationJSONPart)property.GetValue(animation.parts, null);
-                    Vector3 anim_position = new Vector3(apart.position[index][0], apart.position[index][1], apart.position[index][2]);
-                    Quaternion anim_rotation = rotation_offset * fs.self.transform.rotation;
-                    anim_rotation = anim_rotation * new Quaternion(apart.quaternion[index][0], apart.quaternion[index][1], apart.quaternion[index][2], apart.quaternion[index][3]);
+                    Vector3 anim_position = Vector3.Lerp(skate.positions[a], skate.positions[b], t);
+                    Quaternion anim_rotation = baseRotation * Quaternion.Slerp(skate.rotations[a], skate.rotations[b], t);
+                    Vector3 target_pos = TranslateWithRotation(basePosition, anim_position, fs.self.transform.rotation);
 
-                    Vector3 position = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
-                    Vector3 target_pos = TranslateWithRotation(position, anim_position, fs.self.transform.rotation);
-
-                    float skate_step = Time.deltaTime * 48f;
+                    // Lerp by dt * 48 as tuned at 60 fps
+                    float skate_step = Utils.FrameIndependentLerp((1f / 60f) * 48f);
 
                     target_pos = Vector3.Lerp(Main.walking_go.fakeSkate.transform.position, target_pos, skate_step);
                     anim_rotation = Quaternion.Lerp(Main.walking_go.fakeSkate.transform.rotation, anim_rotation * Quaternion.Euler(90f, 0, 0), skate_step);
@@ -344,7 +319,7 @@ namespace walking_mod
                         float time_start = animation.times[mag_start];
                         float time_end = animation.times[mag_end];
                         Main.walking_go.magnetized = animTime >= time_start && animTime <= time_end;
-                        if(Main.walking_go.magnetized)
+                        if (Main.walking_go.magnetized)
                         {
                             Main.walking_go.fakeSkate.transform.position = target_pos;
                             Main.walking_go.fakeSkate.transform.rotation = anim_rotation;
@@ -355,19 +330,22 @@ namespace walking_mod
                         Main.walking_go.magnetized = true;
                         Main.walking_go.fakeSkate.transform.position = target_pos;
                         Main.walking_go.fakeSkate.transform.rotation = anim_rotation;
-                    }                    
+                    }
                 }
 
-                if (count >= d_crossfade) animTime += Time.deltaTime * speed;
+                last_frame = frame = crossfading ? 0 : b;
 
-                count++;
+                if (!crossfading) animTime += Time.deltaTime * speed;
+                count += frameScale;
 
                 if (animTime > timeLimit)
                 {
                     if (loop)
                     {
-                        count = 0;
-                        animTime = timeLimitStart;
+                        // carry the overshoot into the next loop, and don't restart the crossfade:
+                        // resetting count here blended every loop back from the previous pose
+                        float length = timeLimit - timeLimitStart;
+                        animTime = length > 0f ? timeLimitStart + Mathf.Repeat(animTime - timeLimitStart, length) : timeLimitStart;
                     }
                     else
                     {
@@ -385,11 +363,56 @@ namespace walking_mod
             }
         }
 
+        // Finds the keys around animTime. Past the last key a looping animation blends back to its start key.
+        void SampleKeys(float[] times, out int a, out int b, out float t)
+        {
+            int last = times.Length - 1;
+            if (last <= 0)
+            {
+                a = b = 0;
+                t = 1f;
+                return;
+            }
+
+            if (animTime >= times[last])
+            {
+                a = last;
+                if (loop && timeLimit > times[last])
+                {
+                    b = 0;
+                    while (b < last && times[b] < timeLimitStart) b++;
+                    t = (animTime - times[last]) / (timeLimit - times[last]);
+                }
+                else
+                {
+                    b = last;
+                    t = 1f;
+                }
+            }
+            else
+            {
+                b = 0;
+                while (b < last && times[b] < animTime) b++;
+                if (b == 0)
+                {
+                    a = 0;
+                    t = 1f;
+                }
+                else
+                {
+                    a = b - 1;
+                    float span = times[b] - times[a];
+                    t = span > 0f ? (animTime - times[a]) / span : 1f;
+                }
+            }
+
+            t = float.IsNaN(t) ? 1f : Mathf.Clamp01(t);
+        }
+
         public static bool isValidMatrix(Vector3 position, Quaternion rotation)
         {
             if (position == null || rotation == null)
             {
-                Utils.Log("Transform is null.");
                 return false;
             }
 

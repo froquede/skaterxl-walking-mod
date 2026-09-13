@@ -1,10 +1,14 @@
-﻿namespace walking_mod
+﻿using UnityEngine;
+
+namespace walking_mod
 {   
     public class AnimationJSON
     {
         public float duration;
         public float[] times;
         public AnimationJSONParts parts;
+        // parts resolved by bone index (FakeSkater.bones order), avoids reflection lookups every frame
+        public AnimationJSONPart[] boneParts;
 
         public AnimationJSON(float duration, float[] times, AnimationJSONParts parts)
         {
@@ -13,6 +17,17 @@
             this.parts = parts;
 
             if (this.times.Length == 0) this.times = new float[] { duration - .02f };
+        }
+
+        public void ResolveBones(string[] bones)
+        {
+            boneParts = new AnimationJSONPart[bones.Length];
+            System.Type type = typeof(AnimationJSONParts);
+            for (int i = 0; i < bones.Length; i++)
+            {
+                var property = type.GetProperty(bones[i]);
+                if (property != null) boneParts[i] = (AnimationJSONPart)property.GetValue(parts, null);
+            }
         }
 
         public override string ToString()
@@ -97,11 +112,25 @@
     public class AnimationJSONPart
     {
         public float[][] position, quaternion;
+        public Vector3[] positions;
+        public Quaternion[] rotations;
 
         public AnimationJSONPart(float[][] position, float[][] quaternion)
         {
             this.position = position;
             this.quaternion = quaternion;
+
+            // convert once so sampling every frame doesn't rebuild vectors from float arrays
+            positions = new Vector3[position.Length];
+            for (int i = 0; i < position.Length; i++) positions[i] = new Vector3(position[i][0], position[i][1], position[i][2]);
+
+            rotations = new Quaternion[quaternion.Length];
+            for (int i = 0; i < quaternion.Length; i++)
+            {
+                rotations[i] = new Quaternion(quaternion[i][0], quaternion[i][1], quaternion[i][2], quaternion[i][3]);
+                // keep neighbouring keys on the same hemisphere so interpolation takes the short path
+                if (i > 0) rotations[i] = Utils.EnsureQuaternionContinuity(rotations[i - 1], rotations[i]);
+            }
         }
 
         public override string ToString()

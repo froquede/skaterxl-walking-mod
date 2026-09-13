@@ -15,6 +15,19 @@ namespace walking_mod
             return (value - min) * 1f / (max - min);
         }
 
+        // Scales per-frame amounts so they behave as they did at 60 fps regardless of the actual frame rate
+        public static float FrameScale()
+        {
+            return Time.deltaTime * 60f;
+        }
+
+        // Lerp factor that closes the same share of the gap per second as t60 did per frame at 60 fps
+        public static float FrameIndependentLerp(float t60)
+        {
+            t60 = Mathf.Clamp01(t60);
+            return 1f - Mathf.Pow(1f - t60, FrameScale());
+        }
+
         public static float map(float value, float leftMin, float leftMax, float rightMin, float rightMax)
         {
             return rightMin + (value - leftMin) * (rightMax - rightMin) / (leftMax - leftMin);

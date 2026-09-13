@@ -113,8 +113,8 @@ namespace walking_mod
 
                         GUILayout.Label("<b>Volume</b>", title);
                         GUILayout.Space(12);
+                        settings.emote_volume = Slider("<b>Sound emotes</b> (" + (settings.emote_volume * 100).ToString("N0") + "%)", settings.emote_volume, 0f, 1f, .1f, .75f);
                         settings.volume = Slider("<b>Footsteps</b> (" + (settings.volume * 100).ToString("N0") + "%)", settings.volume, 0f, 1f, .1f, .4f);
-                        settings.emote_volume = Slider("<b>Footsteps</b> (" + (settings.emote_volume * 100).ToString("N0") + "%)", settings.volume, 0f, 1f, .1f, .75f);
                     }
                     GUILayout.EndVertical();
                     GUILayout.Space(6);
@@ -172,6 +172,13 @@ namespace walking_mod
                         {
                             GUILayout.Label("Skate hand side", GUILayout.Width(width - 88));
                             if (GUILayout.Button(settings.left_arm ? "Left" : "Right", GUILayout.Height(32), GUILayout.Width(80))) settings.left_arm = !settings.left_arm;
+                        }
+                        GUILayout.EndHorizontal();
+
+                        GUILayout.BeginHorizontal(GUILayout.Width(width));
+                        {
+                            GUILayout.Label("Run button", GUILayout.Width(width - 88));
+                            if (GUILayout.Button(getButtonLabel(settings.run_button), GUILayout.Height(32), GUILayout.Width(80))) settings.run_button = getNextButton(settings.run_button);
                         }
                         GUILayout.EndHorizontal();
 

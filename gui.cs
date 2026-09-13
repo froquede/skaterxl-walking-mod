@@ -67,7 +67,8 @@ namespace walking_mod
             return texture;
         }
 
-        int config_count = 0;
+        // menu counters are in 60 fps frames
+        float config_count = 0;
         bool show_change_btn = false;
         public void Update()
         {
@@ -114,7 +115,7 @@ namespace walking_mod
                     if (sound_emote_config) sound_emote_config = false;
                 }
 
-                config_count++;
+                config_count += Utils.FrameScale();
             }
             else config_count = 0;
 
@@ -134,7 +135,7 @@ namespace walking_mod
             return PlayerController.Instance.inputController.player.GetButton(button) || PlayerController.Instance.inputController.player.GetButtonDown(button) || PlayerController.Instance.inputController.player.GetButtonShortPressDown(button) || PlayerController.Instance.inputController.player.GetButtonLongPressDown(button);
         }
 
-        int debounce = 0;
+        float debounce = 0;
         void ChangeSelect(string dpad)
         {
             if (debounce > 12)
@@ -151,7 +152,7 @@ namespace walking_mod
                 }
                 debounce = 0;
             }
-            debounce++;
+            debounce += Utils.FrameScale();
         }
 
         void resetState()

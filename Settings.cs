@@ -10,8 +10,8 @@ namespace walking_mod
     {
         public bool enabled = true;
         public bool experimental_bail = false;
-        public float volume = .4f;
-        public float emote_volume = .75f;
+        public float volume = .2f;
+        public float emote_volume = .4f;
         public string emote1 = "flair", emote2 = "air_kick", emote3 = "jab", emote4 = "dance";
         public string semote1 = "catchulater", semote2 = "cmonletsmove", semote3 = "hey_you_guys", semote4 = "pretty_sick";
         public Vector3 camera_offset = new Vector3(.05f, .12f, -1.3f);
@@ -26,6 +26,7 @@ namespace walking_mod
         public bool left_arm = false;
         public bool hippie_jump = false;
         public int frame_wait = 12;
+        public string run_button = "A";
         public string jump_button = "B";
         public string magnetize_button = "X";
         public string pin_button = "Y";
