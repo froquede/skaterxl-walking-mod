@@ -22,6 +22,9 @@ namespace walking_mod
         public float minVelocityRoll = 0.3f;
         public float smooth_factor_transition = .25f;
         public float camera_pos_vel = 20f, camera_rot_vel = 20f;
+        // camera swings back behind the character while moving and the right stick is left alone
+        public bool camera_auto_follow = true;
+        public float camera_follow_delay = .75f, camera_follow_speed = 3f;
         public float bailLimit = 2f;
         public bool left_arm = false;
         public bool hippie_jump = false;

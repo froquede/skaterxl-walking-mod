@@ -161,6 +161,21 @@ namespace walking_mod
                         settings.camera_pos_vel = Slider("Position (" + settings.camera_pos_vel.ToString("N2") + ")", settings.camera_pos_vel, 0f, 40f, .01f, 20f);
                         settings.camera_rot_vel = Slider("Rotation (" + settings.camera_rot_vel.ToString("N2") + ")", settings.camera_rot_vel, 0f, 40f, .01f, 20f);
                         GUILayout.Space(6);
+
+                        GUILayout.BeginHorizontal(GUILayout.Width(width));
+                        {
+                            GUILayout.Label("<b>Follow behind when the right stick is released</b>", subtitle, GUILayout.Width(width - 88));
+                            if (GUILayout.Button(settings.camera_auto_follow ? "Enabled" : "Disabled", GUILayout.Height(32), GUILayout.Width(80))) settings.camera_auto_follow = !settings.camera_auto_follow;
+                        }
+                        GUILayout.EndHorizontal();
+
+                        if (settings.camera_auto_follow)
+                        {
+                            GUILayout.Space(6);
+                            settings.camera_follow_delay = Slider("Follow delay (" + settings.camera_follow_delay.ToString("N2") + " s)", settings.camera_follow_delay, 0f, 5f, .05f, .75f);
+                            settings.camera_follow_speed = Slider("Follow speed (" + settings.camera_follow_speed.ToString("N2") + ")", settings.camera_follow_speed, .5f, 10f, .1f, 3f);
+                        }
+                        GUILayout.Space(6);
                     }
                     GUILayout.EndVertical();
                     GUILayout.Space(6);

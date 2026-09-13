@@ -37,6 +37,49 @@ namespace walking_mod
         public int mag_start = -1, mag_end = -1;
         // forced closed hands, the hand holding the board closes on its own
         public bool right_hand_closed = false, left_hand_closed = false;
+        // normalized time the left foot plants in a looping cycle, -1 when unknown; lets walk, run and stairs switch in step
+        public float footPhase = -1f;
+
+        // Crossfades start from the pose actually on screen (kept relative to the body), while the new animation already runs.
+        // Blending from the old clip's last key with the new one frozen on its first key popped on quick changes and hitched.
+        static Vector3[] fadePositions;
+        static Quaternion[] fadeRotations;
+        static bool[] fadeValid;
+        bool fading;
+        float fadeElapsed, fadeDuration;
+        // the animation being faded out keeps playing under the blend, so transitions mix two motions instead of morphing
+        // out of a frozen pose
+        AnimController fadeSource;
+
+        // a second cycle mixed in by weight and kept in step with this one (walk with run, stairs with running stairs),
+        // so speed changes blend the stride continuously instead of switching clips
+        public AnimController layer;
+        public float layerWeight;
+        int keyA, keyB, layerA, layerB;
+        float keyT, layerT;
+        bool useLayer;
+
+        // A one-shot animation (jump, roll, emote) blends into this animation over its last moments, so it ends already in
+        // the pose it hands over to instead of fading out of its frozen last frame afterwards.
+        public AnimController outTo;
+        public float blendOutDuration = .3f;
+        float outWeight;
+        public float blendOutWeight { get { return outWeight; } }
+        public bool isLoop { get { return loop; } }
+        // real seconds left until the animation reaches its end
+        public float remainingTime { get { return (timeLimit - animTime) / Mathf.Max(speed, .01f); } }
+
+        // another cycle (with its own layer) mixed in by weight and kept in step with this one: stairs over the stride
+        public AnimController blendTarget;
+        public float blendWeight;
+        bool useBlend;
+
+        // a standing animation mixed over everything by weight (idle under the stride), running on its own clock
+        public AnimController idleLayer;
+        public float idleWeight;
+        int idleA, idleB;
+        float idleT;
+        bool useIdle;
 
         public AnimController(AnimController origin)
         {
@@ -63,6 +106,17 @@ namespace walking_mod
             skate_animation = origin.skate_animation;
             right_hand_closed = origin.right_hand_closed;
             left_hand_closed = origin.left_hand_closed;
+            footPhase = origin.footPhase;
+            timeLimitStart = origin.timeLimitStart;
+            fading = origin.fading;
+            layer = origin.layer;
+            layerWeight = origin.layerWeight;
+            idleLayer = origin.idleLayer;
+            idleWeight = origin.idleWeight;
+            blendTarget = origin.blendTarget;
+            blendWeight = origin.blendWeight;
+            outTo = origin.outTo;
+            outWeight = origin.outWeight;
         }
 
         public AnimController()
@@ -199,6 +253,159 @@ namespace walking_mod
 
             if (timeLimit == 0f) timeLimit = animation.duration;
             if (timeLimitStart == 0f) timeLimitStart = animation.times[0];
+            footPhase = FindFootPhase();
+        }
+
+        float FindFootPhase()
+        {
+            AnimationJSONPart toe = animation.parts.Skater_Toe1_l;
+            float length = timeLimit - timeLimitStart;
+            if (!loop || toe == null || toe.positions == null || toe.positions.Length != animation.times.Length || length <= 0f) return -1f;
+
+            int lowest = 0;
+            for (int i = 1; i < toe.positions.Length; i++)
+            {
+                if (toe.positions[i].y < toe.positions[lowest].y) lowest = i;
+            }
+            return Mathf.Clamp01((animation.times[lowest] - timeLimitStart) / length);
+        }
+
+        public float normalizedTime
+        {
+            get
+            {
+                float length = timeLimit - timeLimitStart;
+                return length > 0f ? Mathf.Repeat((animTime - timeLimitStart) / length, 1f) : 0f;
+            }
+            set
+            {
+                animTime = timeLimitStart + Mathf.Repeat(value, 1f) * (timeLimit - timeLimitStart);
+            }
+        }
+
+        // keys of this animation (and its layer, synced to the same point of the stride) for the current time
+        void PrepareKeys()
+        {
+            SampleKeys(animation.times, out keyA, out keyB, out keyT);
+
+            useLayer = layer != null && layer != this && layerWeight > .001f && layer.animation != null && layer.animation.boneParts != null;
+            if (useLayer)
+            {
+                float phase = normalizedTime;
+                if (footPhase >= 0f && layer.footPhase >= 0f) phase = phase - footPhase + layer.footPhase;
+                layer.normalizedTime = phase;
+                layer.SampleKeys(layer.animation.times, out layerA, out layerB, out layerT);
+            }
+
+            useBlend = blendTarget != null && blendTarget != this && blendTarget.blendTarget != this && blendWeight > .001f && blendTarget.animation != null && blendTarget.animation.boneParts != null;
+            if (useBlend)
+            {
+                float phase = normalizedTime;
+                if (footPhase >= 0f && blendTarget.footPhase >= 0f) phase = phase - footPhase + blendTarget.footPhase;
+                blendTarget.normalizedTime = phase;
+                blendTarget.PrepareKeys();
+            }
+
+            useIdle = idleLayer != null && idleLayer != this && idleWeight > .001f && idleLayer.animation != null && idleLayer.animation.boneParts != null;
+            if (useIdle) idleLayer.SampleKeys(idleLayer.animation.times, out idleA, out idleB, out idleT);
+        }
+
+        // advances an animation that isn't the one playing (a layer, or the locomotion mix under an action), looping it
+        public void AdvanceLayerTime(float dt)
+        {
+            animTime += dt * speed;
+            float length = timeLimit - timeLimitStart;
+            if (animTime > timeLimit) animTime = loop && length > 0f ? timeLimitStart + Mathf.Repeat(animTime - timeLimitStart, length) : timeLimit;
+            if (animTime < timeLimitStart) animTime = timeLimitStart;
+        }
+
+        // pose of one bone relative to the animation root
+        bool SampleBone(int i, out Vector3 position, out Quaternion rotation)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            AnimationJSONPart part = i < animation.boneParts.Length ? animation.boneParts[i] : null;
+            if (part == null || keyB >= part.positions.Length || keyB >= part.rotations.Length || keyA >= part.positions.Length) return false;
+
+            position = Vector3.Lerp(part.positions[keyA], part.positions[keyB], keyT);
+            rotation = Quaternion.Slerp(part.rotations[keyA], part.rotations[keyB], keyT);
+
+            if (useLayer)
+            {
+                AnimationJSONPart lpart = i < layer.animation.boneParts.Length ? layer.animation.boneParts[i] : null;
+                if (lpart != null && layerB < lpart.positions.Length && layerB < lpart.rotations.Length && layerA < lpart.positions.Length)
+                {
+                    Vector3 lpos = Vector3.Lerp(lpart.positions[layerA], lpart.positions[layerB], layerT);
+                    Quaternion lrot = Quaternion.Slerp(lpart.rotations[layerA], lpart.rotations[layerB], layerT);
+                    position = Vector3.Lerp(position, lpos, layerWeight);
+                    rotation = Quaternion.Slerp(rotation, lrot, layerWeight);
+                }
+            }
+
+            if (useBlend)
+            {
+                Vector3 bpos;
+                Quaternion brot;
+                if (blendTarget.SampleBone(i, out bpos, out brot))
+                {
+                    position = Vector3.Lerp(position, bpos, blendWeight);
+                    rotation = Quaternion.Slerp(rotation, brot, blendWeight);
+                }
+            }
+
+            if (useIdle)
+            {
+                AnimationJSONPart ipart = i < idleLayer.animation.boneParts.Length ? idleLayer.animation.boneParts[i] : null;
+                if (ipart != null && idleB < ipart.positions.Length && idleB < ipart.rotations.Length && idleA < ipart.positions.Length)
+                {
+                    Vector3 ipos = Vector3.Lerp(ipart.positions[idleA], ipart.positions[idleB], idleT);
+                    Quaternion irot = Quaternion.Slerp(ipart.rotations[idleA], ipart.rotations[idleB], idleT);
+                    position = Vector3.Lerp(position, ipos, idleWeight);
+                    rotation = Quaternion.Slerp(rotation, irot, idleWeight);
+                }
+            }
+            return true;
+        }
+
+        void CaptureFade()
+        {
+            fading = false;
+            fadeSource = null;
+            if (!doCrossfade || fs == null || !fs.self || fs.bones == null) return;
+
+            AnimController last = Main.walking_go.last_animation;
+            bool sameAnimation = last != null && last.name == name;
+            if (sameAnimation && crossfade <= 0) return;
+
+            int n = fs.bones.Length;
+            if (fadePositions == null || fadePositions.Length != n)
+            {
+                fadePositions = new Vector3[n];
+                fadeRotations = new Quaternion[n];
+                fadeValid = new bool[n];
+            }
+
+            Transform body = fs.self.transform;
+            Quaternion inverse = Quaternion.Inverse(body.rotation);
+            for (int i = 0; i < n; i++)
+            {
+                Transform bone = fs.getBone(i);
+                fadeValid[i] = bone != null;
+                if (!bone) continue;
+                fadePositions[i] = inverse * (bone.position - body.position);
+                fadeRotations[i] = inverse * bone.rotation;
+            }
+
+            // Keep the previous animation running under the blend. If it was itself still fading in, the pose on screen
+            // is a mix, so blend from the captured pose instead or the unfinished part would pop.
+            if (!sameAnimation && last != null && last.animation != null && last.animation.boneParts != null && !last.fading && last.outWeight < .01f) fadeSource = last;
+
+            // restarting the same animation keeps its own crossfade length (60 fps frames); moving between two cycles
+            // (idle, walk, run, stairs) gets the longest blend
+            if (sameAnimation) fadeDuration = crossfade / 60f;
+            else fadeDuration = loop && last != null && last.loop ? .4f : .28f;
+            fadeElapsed = 0f;
+            fading = true;
         }
 
         public void Update()
@@ -212,19 +419,45 @@ namespace walking_mod
 
                 if (Main.walking_go.last_animation == null) Main.walking_go.last_animation = new AnimController(this);
 
-                // crossfade lengths are in 60 fps frames
-                int d_crossfade = (Main.walking_go.last_animation.name != name && doCrossfade) ? 9 : doCrossfade ? crossfade : 0;
                 if (Time.unscaledTime - Main.walking_go.enterBailTimestamp <= Time.deltaTime * 2f && Main.walking_go.enterFromBail)
                 {
                     interpolateActual = true;
-                    d_crossfade = 12;
                 }
-                bool crossfading = count < d_crossfade;
+
+                float blend = 1f;
+                if (fading)
+                {
+                    fadeElapsed += Time.deltaTime;
+                    float x = fadeDuration > 0f ? Mathf.Clamp01(fadeElapsed / fadeDuration) : 1f;
+                    blend = x * x * (3f - 2f * x);
+                    if (x >= 1f)
+                    {
+                        fading = false;
+                        fadeSource = null;
+                    }
+                }
+
+                // the faded out animation advances as it would have kept playing
+                Vector3 sourceBasePosition = Vector3.zero;
+                Quaternion sourceBaseRotation = Quaternion.identity;
+                AnimController src = fading ? fadeSource : null;
+                if (src != null)
+                {
+                    src.animTime += Time.deltaTime * src.speed;
+                    float srcLength = src.timeLimit - src.timeLimitStart;
+                    if (src.animTime > src.timeLimit) src.animTime = src.loop && srcLength > 0f ? src.timeLimitStart + Mathf.Repeat(src.animTime - src.timeLimitStart, srcLength) : src.timeLimit;
+                    src.PrepareKeys();
+                    sourceBaseRotation = src.rotation_offset * fs.self.transform.rotation;
+                    sourceBasePosition = TranslateWithRotation(fs.self.transform.position, src.offset, fs.self.transform.rotation) + Vector3.up * Main.walking_go.visualOffsetY;
+                }
+
+                // the idle layer keeps its own clock, advanced once here (a fade source may share it)
+                if (idleLayer != null && idleLayer != this && idleLayer.animation != null) idleLayer.AdvanceLayerTime(Time.deltaTime);
 
                 // keyframes around animTime, sampled by time so the pose doesn't depend on the frame rate
-                int a, b;
-                float t;
-                SampleKeys(times, out a, out b, out t);
+                PrepareKeys();
+                int a = keyA, b = keyB;
+                float t = keyT;
 
                 AnimationJSONPart pelvis = animation.parts.Skater_pelvis;
                 if (anchorRoot && pelvis != null)
@@ -235,17 +468,32 @@ namespace walking_mod
                     offset = !anchorRootFade ? target_offset : Vector3.Lerp(offset, target_offset, Utils.FrameIndependentLerp((1f / 60f) * 24f));
                 }
 
-                // crossfade source: the previous animation's last shown key, or the current pose if there's none
-                AnimController source = Main.walking_go.last_animation;
-                AnimationJSON source_anim = crossfading && source != null ? source.animation : null;
-                int source_key = 0;
-                if (source_anim != null && source_anim.boneParts != null) source_key = Mathf.Clamp(source.last_frame, 0, source_anim.times.Length - 1);
-                else source_anim = null;
-
-                float blend = d_crossfade > 0 ? Mathf.Clamp01((count + frameScale) / d_crossfade) : 1f;
+                Transform bodyTransform = fs.self.transform;
+                Vector3 bodyPosition = bodyTransform.position;
+                Quaternion bodyRotation = bodyTransform.rotation;
 
                 Quaternion baseRotation = rotation_offset * fs.self.transform.rotation;
-                Vector3 basePosition = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation);
+                // visualOffsetY eases the body over steps the physics capsule takes instantly
+                Vector3 basePosition = TranslateWithRotation(fs.self.transform.position, offset, fs.self.transform.rotation) + Vector3.up * Main.walking_go.visualOffsetY;
+
+                // one-shot animations blend into the animation they hand over to (kept running by the walking controller) near their end
+                outWeight = 0f;
+                AnimController outAnim = null;
+                Vector3 outBasePosition = Vector3.zero;
+                Quaternion outBaseRotation = Quaternion.identity;
+                if (!loop && outTo != null && outTo != this && outTo.animation != null && outTo.animation.boneParts != null && blendOutDuration > 0f)
+                {
+                    float remaining = (timeLimit - animTime) / Mathf.Max(speed, .01f);
+                    float x = Mathf.Clamp01(1f - remaining / blendOutDuration);
+                    outWeight = x * x * (3f - 2f * x);
+                    if (outWeight > .001f)
+                    {
+                        outAnim = outTo;
+                        outAnim.PrepareKeys();
+                        outBaseRotation = outAnim.rotation_offset * bodyRotation;
+                        outBasePosition = TranslateWithRotation(bodyPosition, outAnim.offset, bodyRotation) + Vector3.up * Main.walking_go.visualOffsetY;
+                    }
+                }
 
                 bool holdingBoard = Main.walking_go.magnetized && !skate_animation;
                 bool closeLeft = left_hand_closed || (holdingBoard && Main.settings.left_arm);
@@ -254,13 +502,25 @@ namespace walking_mod
                 for (int i = 0; i < fs.bones.Length; i++)
                 {
                     Transform tpart = fs.getBone(i);
-                    AnimationJSONPart apart = animation.boneParts[i];
-                    if (!tpart || apart == null) continue;
+                    if (!tpart) continue;
 
                     try
                     {
-                        Vector3 target_pos = TranslateWithRotation(basePosition, Vector3.Lerp(apart.positions[a], apart.positions[b], t), baseRotation);
-                        Quaternion target_rot = baseRotation * Quaternion.Slerp(apart.rotations[a], apart.rotations[b], t);
+                        Vector3 local_pos;
+                        Quaternion local_rot;
+                        if (!SampleBone(i, out local_pos, out local_rot)) continue;
+                        Vector3 target_pos = TranslateWithRotation(basePosition, local_pos, baseRotation);
+                        Quaternion target_rot = baseRotation * local_rot;
+                        if (outAnim != null)
+                        {
+                            Vector3 out_pos;
+                            Quaternion out_rot;
+                            if (outAnim.SampleBone(i, out out_pos, out out_rot))
+                            {
+                                target_pos = Vector3.Lerp(target_pos, TranslateWithRotation(outBasePosition, out_pos, outBaseRotation), outWeight);
+                                target_rot = Quaternion.Slerp(target_rot, outBaseRotation * out_rot, outWeight);
+                            }
+                        }
                         if (!isValidMatrix(target_pos, target_rot)) continue;
 
                         if (interpolateActual)
@@ -269,17 +529,22 @@ namespace walking_mod
                             tpart.position = Vector3.Lerp(tpart.position, target_pos, step);
                             tpart.rotation = Quaternion.Slerp(tpart.rotation, target_rot, step);
                         }
-                        else if (crossfading && blend < 1f)
+                        else if (blend < 1f && fadeValid != null && i < fadeValid.Length && fadeValid[i])
                         {
-                            Vector3 from_pos = tpart.position;
-                            Quaternion from_rot = tpart.rotation;
-                            AnimationJSONPart spart = source_anim != null ? source_anim.boneParts[i] : null;
-                            if (spart != null && source_key < spart.positions.Length && source_key < spart.rotations.Length)
+                            Vector3 from_pos;
+                            Quaternion from_rot;
+                            Vector3 source_pos;
+                            Quaternion source_rot;
+                            if (src != null && src.SampleBone(i, out source_pos, out source_rot))
                             {
-                                from_pos = TranslateWithRotation(basePosition, spart.positions[source_key], baseRotation);
-                                from_rot = baseRotation * spart.rotations[source_key];
+                                from_pos = TranslateWithRotation(sourceBasePosition, source_pos, sourceBaseRotation);
+                                from_rot = sourceBaseRotation * source_rot;
                             }
-
+                            else
+                            {
+                                from_pos = bodyPosition + bodyRotation * fadePositions[i];
+                                from_rot = bodyRotation * fadeRotations[i];
+                            }
                             tpart.position = Vector3.Lerp(from_pos, target_pos, blend);
                             tpart.rotation = Quaternion.Slerp(from_rot, target_rot, blend);
                         }
@@ -333,9 +598,9 @@ namespace walking_mod
                     }
                 }
 
-                last_frame = frame = crossfading ? 0 : b;
+                last_frame = frame = b;
 
-                if (!crossfading) animTime += Time.deltaTime * speed;
+                animTime += Time.deltaTime * speed;
                 count += frameScale;
 
                 if (animTime > timeLimit)
@@ -473,11 +738,26 @@ namespace walking_mod
             return output;
         }
 
+        // plays on from the current time (an animation whose clock kept running in the background)
+        public void Resume(bool crossfade)
+        {
+            count = 0;
+            isPlaying = true;
+            outWeight = 0f;
+            if (crossfade) CaptureFade();
+            else
+            {
+                fading = false;
+                fadeSource = null;
+            }
+        }
+
         public void Play()
         {
             animTime = timeLimitStart;
             count = 0;
             isPlaying = true;
+            CaptureFade();
         }
 
         public void Play(CallBack call)
@@ -486,6 +766,7 @@ namespace walking_mod
             count = 0;
             callback = call;
             isPlaying = true;
+            CaptureFade();
         }
 
         public void Stop(bool ignore_callback = false)

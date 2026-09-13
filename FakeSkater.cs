@@ -63,12 +63,12 @@ namespace walking_mod
                 Destroy(self.transform.Find("ColliderActivationTrigger").gameObject);
                 Destroy(self.transform.Find("Original Camera Position").gameObject);
 
+                // any collider left on the cloned bones would move with the animation inside the body's rigidbody and shove it around
+                foreach (Collider child in self.GetComponentsInChildren<Collider>(true)) child.enabled = false;
+
                 collider = self.AddComponent<CapsuleCollider>();
                 collider.height = 1.4404f;
                 collider.radius = .2f;
-                collider.material.dynamicFriction = .8f;
-                collider.material.staticFriction = 3f;
-                collider.material.bounciness = 1f;
 
                 cache = new Dictionary<string, Transform>();
                 joints = null;
